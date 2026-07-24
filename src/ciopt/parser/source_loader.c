@@ -32,6 +32,8 @@ static bool _is_excluded(const char *dirname, const char *const *exclude_dirs, s
     return false;
 }
 
+static inline void _unused_is_excluded_silence(void) { (void)_is_excluded; }
+
 SourceFile *source_load(const char *path)
 {
     if (!path) return NULL;
