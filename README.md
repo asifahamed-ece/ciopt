@@ -37,7 +37,7 @@ CiOpt analyzes the AI-generated code and produces a **structured report** that y
 ┌─────────────────────────────────────────────────────────┐
 │                   VIBE CODING LOOP                      │
 │                                                         │
-│   You ──prompt──▶ AI writes C code                      │
+│   You ──prompt──▶ AI writes C code                     │
 │                      │                                  │
 │                      ▼                                  │
 │               CiOpt analyzes it                         │
@@ -47,10 +47,10 @@ CiOpt analyzes the AI-generated code and produces a **structured report** that y
 │            anti-patterns, fixes)                        │
 │                      │                                  │
 │                      ▼                                  │
-│           Feed report back to AI ◀── "Fix these issues" │
+│          Feed report back to AI ◀── "Fix these issues" │
 │                      │                                  │
 │                      ▼                                  │
-│              AI improves code                            │
+│              AI improves code                           │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
