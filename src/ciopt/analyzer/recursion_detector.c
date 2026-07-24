@@ -282,6 +282,9 @@ RecursionInfo *detect_recursion(CioptNode *func_node,
 {
     if (!func_node || func_node->type != CIOPT_NODE_FUNCTION_DEF) return NULL;
 
+    (void)all_function_names;
+    (void)function_count;
+
     const char *func_name = func_node->data.func_def.name;
     RecursionInfo *info = recursion_info_create(func_name, func_node->lineno);
     if (!info) return NULL;
