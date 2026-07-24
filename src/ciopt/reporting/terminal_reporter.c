@@ -112,10 +112,10 @@ void render_terminal(AnalysisReport *report, bool verbose, const char *output_pa
                 }
             }
 
-            /* Show dead code */
-            if (fr->dead_code && fr->dead_code->count > 0) {
-                for (size_t d = 0; d < fr->dead_code->count; d++) {
-                    DeadCodeItem *dc = &fr->dead_code->items[d];
+            /* Show dead code (Scoped to THIS function) */
+            if (func->dead_code && func->dead_code->count > 0) {
+                for (size_t d = 0; d < func->dead_code->count; d++) {
+                    DeadCodeItem *dc = &func->dead_code->items[d];
                     fprintf(out, "    " ANSI_DIM "[dead code] %s" ANSI_RESET " (L%d): %s\n",
                             dc->kind, dc->lineno, dc->description);
                 }
