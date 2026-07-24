@@ -12,23 +12,30 @@ static const char *_known_o_log_n[] = {
     "bsearch", NULL
 };
 
+/* PROVABLY O(n) — MUST touch every byte, no shortcut exists */
 static const char *_known_o_n[] = {
-    "strlen", "strcpy", "strcmp", "memcpy", "memset",
-    "atoi", "atof", "printf", "fprintf", "sprintf",
-    "snprintf", "puts", "gets", "fgets", "fread",
-    "fwrite", "strdup", "strndup",
-    "strchr", "strrchr", "strstr", "memchr",
+    "strlen", "strcpy", "strncpy", "strcmp", "strncmp",
+    "strcat", "strncat",
+    "memcpy", "memmove", "memset", "memchr",
+    "strdup", "strndup",
+    "strchr", "strrchr", "strstr",
     "index", "rindex",
-    "calloc", "malloc", "realloc",
+    "calloc",           /* MUST zero n bytes */
+    "fgets", "fread", "fwrite",  /* MUST transfer n bytes */
+    "gets",             /* unsafe, but O(n) */
     NULL
 };
+/* O(1) — constant time, single operation, or amortized */
 static const char *_known_o_1[] = {
     "sizeof", "free",
-    "abs", "labs", "llabs",
-    "tolower", "toupper",
+    "malloc", "realloc",   /* O(1) amortized — virtual memory mapping */
+    "abs", "labs", "llabs", "fabs", "sqrt", "cbrt",
     "isalnum", "isalpha", "iscntrl", "isdigit",
     "isgraph", "islower", "isprint", "ispunct",
     "isspace", "isupper", "isxdigit",
+    "tolower", "toupper",  /* single character lookup */
+    "printf", "fprintf", "sprintf", "snprintf", "puts",  /* I/O — context dependent, treat as O(1) */
+    "atoi", "atof", "atol",  /* usually short strings */
     NULL
 };
 
