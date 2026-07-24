@@ -115,11 +115,19 @@ static FileReport *_analyze_file(SourceFile *sf, AnalysisConfig *config)
             if (stmt->type == CIOPT_NODE_FUNCTION_DEF) {
                 DeadCodeAnalysis *dca = detect_dead_code(stmt);
                 if (dca) {
-                    if (!fr->dead_code) fr->dead_code = dca;
-                    else {
-                        /* Merge: just use the last one for now */
-                        dead_code_analysis_free(fr->dead_code);
+                    if (!fr->dead_code) {
                         fr->dead_code = dca;
+                    } else {
+                        for (size_t k = 0; k < dca->count; k++) {
+                            dead_code_analysis_add(fr->dead_code,
+                                dca->items[k].kind,
+                                dca->items[k].lineno,
+                                dca->items[k].end_lineno,
+                                dca->items[k].name,
+                                dca->items[k].description,
+                                dca->items[k].suggestion);
+                        }
+                        dead_code_analysis_free(dca);
                     }
                 }
             }
