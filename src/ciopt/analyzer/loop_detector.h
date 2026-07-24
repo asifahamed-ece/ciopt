@@ -60,6 +60,7 @@ struct LoopDetail {
     bool has_expensive_operation;
     char **expensive_operations;
     size_t expensive_count;
+    size_t expensive_capacity;
     CioptNode *node;            /* pointer to AST node */
 };
 

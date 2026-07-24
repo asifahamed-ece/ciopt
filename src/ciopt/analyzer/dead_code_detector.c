@@ -48,14 +48,18 @@ int dead_code_analysis_add(DeadCodeAnalysis *dca, const char *kind,
 }
 
 /* Check for unreachable code after return/break/continue/goto */
+static void _check_unreachable_recursive(CioptNode *node, DeadCodeAnalysis *dca);
+
 static void _check_unreachable(CioptNode *node, DeadCodeAnalysis *dca)
 {
     if (!node || node->type != CIOPT_NODE_BLOCK) return;
 
     for (size_t i = 0; i < node->data.block.stmts.count; i++) {
         CioptNode *stmt = node->data.block.stmts.nodes[i];
+
+        /* Check if this statement is a jump */
         if (ciopt_node_is_jump(stmt->type)) {
-            /* Everything after this is unreachable */
+            /* Everything after this in the same block is unreachable */
             for (size_t j = i + 1; j < node->data.block.stmts.count; j++) {
                 CioptNode *dead = node->data.block.stmts.nodes[j];
                 dead_code_analysis_add(dca, "unreachable",
@@ -65,6 +69,48 @@ static void _check_unreachable(CioptNode *node, DeadCodeAnalysis *dca)
             }
             break;
         }
+
+        /* Recursively check inside if/else bodies, switches, etc. */
+        if (stmt->type == CIOPT_NODE_IF) {
+            if (stmt->data.if_stmt.then_body)
+                _check_unreachable(stmt->data.if_stmt.then_body, dca);
+            if (stmt->data.if_stmt.else_body)
+                _check_unreachable(stmt->data.if_stmt.else_body, dca);
+        } else if (stmt->type == CIOPT_NODE_SWITCH) {
+            /* Check each case body */
+            if (stmt->data.switch_stmt.body)
+                _check_unreachable_recursive(stmt->data.switch_stmt.body, dca);
+        } else if (stmt->type == CIOPT_NODE_FOR ||
+                   stmt->type == CIOPT_NODE_WHILE ||
+                   stmt->type == CIOPT_NODE_DO_WHILE) {
+            /* Check loop bodies */
+            CioptNode *body = (stmt->type == CIOPT_NODE_FOR) ?
+                              stmt->data.for_loop.body : stmt->data.loop.body;
+            if (body)
+                _check_unreachable(body, dca);
+        } else if (stmt->type == CIOPT_NODE_BLOCK) {
+            /* Nested block */
+            _check_unreachable(stmt, dca);
+        }
+    }
+}
+
+static void _check_unreachable_recursive(CioptNode *node, DeadCodeAnalysis *dca)
+{
+    if (!node) return;
+
+    if (node->type == CIOPT_NODE_BLOCK) {
+        _check_unreachable(node, dca);
+    } else if (node->type == CIOPT_NODE_CASE) {
+        /* Check case body - look for jumps and unreachable code within */
+        if (node->data.case_stmt.body) {
+            _check_unreachable(node->data.case_stmt.body, dca);
+        }
+    } else if (node->type == CIOPT_NODE_IF) {
+        if (node->data.if_stmt.then_body)
+            _check_unreachable(node->data.if_stmt.then_body, dca);
+        if (node->data.if_stmt.else_body)
+            _check_unreachable(node->data.if_stmt.else_body, dca);
     }
 }
 

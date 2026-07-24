@@ -196,6 +196,11 @@ static ComplexityClass _calculate_single_loop_complexity(LoopDetail *loop)
 
     ComplexityClass self_c = estimate_loop_iterations(loop);
 
+    /* Check for expensive O(N) calls inside this loop - makes it O(n^2) */
+    if (loop->has_expensive_operation && self_c == COMPLEXITY_O_N) {
+        self_c = COMPLEXITY_O_N_SQUARED;
+    }
+
     if (loop->children_count == 0) return self_c;
 
     ComplexityClass max_child_c = COMPLEXITY_O_1;

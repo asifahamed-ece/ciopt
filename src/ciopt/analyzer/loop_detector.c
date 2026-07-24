@@ -3,89 +3,155 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Known O(N) functions that can make loops O(n^2) when called inside */
+static const char *_loop_expensive_o_n[] = {
+    "strlen", "strcpy", "strcmp", "strncpy", "strncat",
+    "memcpy", "memset", "memmove", "memcmp",
+    "strchr", "strrchr", "strstr", "strspn", "strcspn",
+    "strpbrk", "strncmp", "strcoll", "strxfrm",
+    NULL
+};
+
+/* Check if a function call is a known O(N) operation */
+static bool _is_expensive_call(const char *func_name)
+{
+    if (!func_name) return false;
+    for (int i = 0; _loop_expensive_o_n[i]; i++) {
+        if (strcmp(func_name, _loop_expensive_o_n[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
 LoopDetail *loop_detail_create(LoopKind kind, int lineno)
 {
     LoopDetail *loop = (LoopDetail *)calloc(1, sizeof(LoopDetail));
     if (!loop) return NULL;
+    
     loop->kind = kind;
     loop->lineno = lineno;
     loop->end_lineno = lineno;
     loop->depth = 1;
+    loop->parent = NULL;
+    loop->children = NULL;
+    loop->children_count = 0;
+    loop->children_capacity = 0;
+    loop->variables = NULL;
+    loop->variables_count = 0;
+    loop->variables_capacity = 0;
+    loop->contains_break = false;
+    loop->contains_continue = false;
+    loop->contains_return = false;
+    loop->has_invariant_code = false;
+    loop->invariant_lines = NULL;
+    loop->invariant_count = 0;
+    loop->has_expensive_operation = false;
+    loop->expensive_operations = NULL;
+    loop->expensive_count = 0;
+    loop->expensive_capacity = 0;
+    loop->node = NULL;
+    
     return loop;
-}
-
-int loop_detail_add_child(LoopDetail *parent, LoopDetail *child)
-{
-    if (!parent || !child) return -1;
-    if (parent->children_count >= parent->children_capacity) {
-        size_t new_cap = parent->children_capacity ? parent->children_capacity * 2 : 4;
-        LoopDetail **new_ch = (LoopDetail **)realloc(parent->children, new_cap * sizeof(LoopDetail *));
-        if (!new_ch) return -1;
-        parent->children = new_ch;
-        parent->children_capacity = new_cap;
-    }
-    parent->children[parent->children_count++] = child;
-    child->parent = parent;
-    child->depth = parent->depth + 1;
-    return 0;
-}
-
-int loop_detail_add_variable(LoopDetail *loop, const char *name, int lineno)
-{
-    if (!loop || !name) return -1;
-    if (loop->variables_count >= loop->variables_capacity) {
-        size_t new_cap = loop->variables_capacity ? loop->variables_capacity * 2 : 4;
-        LoopVariable *new_v = (LoopVariable *)realloc(loop->variables, new_cap * sizeof(LoopVariable));
-        if (!new_v) return -1;
-        loop->variables = new_v;
-        loop->variables_capacity = new_cap;
-    }
-    LoopVariable *v = &loop->variables[loop->variables_count++];
-    memset(v, 0, sizeof(LoopVariable));
-    v->name = strdup(name);
-    v->lineno = lineno;
-    return 0;
 }
 
 void loop_detail_free(LoopDetail *loop)
 {
     if (!loop) return;
-    for (size_t i = 0; i < loop->children_count; i++)
+    
+    /* Free children recursively */
+    for (size_t i = 0; i < loop->children_count; i++) {
         loop_detail_free(loop->children[i]);
+    }
     free(loop->children);
+    
+    /* Free variables */
     for (size_t i = 0; i < loop->variables_count; i++) {
         free(loop->variables[i].name);
-        free(loop->variables[i].variable_bound);
         free(loop->variables[i].iterable);
+        free(loop->variables[i].variable_bound);
     }
     free(loop->variables);
-    free(loop->invariant_lines);
-    for (size_t i = 0; i < loop->expensive_count; i++)
+    
+    /* Free expensive operations */
+    for (size_t i = 0; i < loop->expensive_count; i++) {
         free(loop->expensive_operations[i]);
+    }
     free(loop->expensive_operations);
+    
+    free(loop->invariant_lines);
     free(loop);
+}
+
+int loop_detail_add_child(LoopDetail *parent, LoopDetail *child)
+{
+    if (!parent || !child) return -1;
+    
+    if (parent->children_count >= parent->children_capacity) {
+        size_t new_cap = parent->children_capacity ? parent->children_capacity * 2 : 4;
+        LoopDetail **new_children = (LoopDetail **)realloc(
+            parent->children, new_cap * sizeof(LoopDetail *));
+        if (!new_children) return -1;
+        parent->children = new_children;
+        parent->children_capacity = new_cap;
+    }
+    
+    parent->children[parent->children_count++] = child;
+    child->parent = parent;
+    child->depth = parent->depth + 1;
+    
+    return 0;
+}
+
+int loop_detail_add_variable(LoopDetail *loop, const char *name, int lineno)
+{
+    if (!loop) return -1;
+    
+    if (loop->variables_count >= loop->variables_capacity) {
+        size_t new_cap = loop->variables_capacity ? loop->variables_capacity * 2 : 4;
+        LoopVariable *new_vars = (LoopVariable *)realloc(
+            loop->variables, new_cap * sizeof(LoopVariable));
+        if (!new_vars) return -1;
+        loop->variables = new_vars;
+        loop->variables_capacity = new_cap;
+    }
+    
+    LoopVariable *var = &loop->variables[loop->variables_count++];
+    memset(var, 0, sizeof(LoopVariable));
+    var->name = name ? strdup(name) : NULL;
+    var->lineno = lineno;
+    var->is_range = false;
+    var->has_constant_bound = false;
+    var->has_variable_bound = false;
+    var->is_halving = false;
+    var->is_doubling = false;
+    
+    return 0;
 }
 
 LoopAnalysis *loop_analysis_create(const char *function_name)
 {
-    LoopAnalysis *a = (LoopAnalysis *)calloc(1, sizeof(LoopAnalysis));
-    if (!a) return NULL;
-    a->function_name = strdup(function_name);
-    a->max_depth = 0;
-    a->total_loops = 0;
-    return a;
+    LoopAnalysis *analysis = (LoopAnalysis *)calloc(1, sizeof(LoopAnalysis));
+    if (!analysis) return NULL;
+    
+    analysis->function_name = function_name ? strdup(function_name) : NULL;
+    analysis->loops = NULL;
+    analysis->loops_count = 0;
+    analysis->loops_capacity = 0;
+    analysis->max_depth = 0;
+    analysis->total_loops = 0;
+    
+    return analysis;
 }
 
 void loop_analysis_free(LoopAnalysis *analysis)
 {
     if (!analysis) return;
-    free(analysis->function_name);
-    /* Only free top-level loops directly; loop_detail_free handles children recursively */
+    
     for (size_t i = 0; i < analysis->loops_count; i++) {
-        if (analysis->loops[i]->depth == 1 || analysis->loops[i]->parent == NULL)
-            loop_detail_free(analysis->loops[i]);
+        loop_detail_free(analysis->loops[i]);
     }
     free(analysis->loops);
+    free(analysis->function_name);
     free(analysis);
 }
 
@@ -445,6 +511,62 @@ static void _analyze_loop_variables(LoopDetail *loop, CioptNode *node)
     }
 }
 
+/* Walk loop body looking for expensive function calls */
+static void _find_expensive_calls_in_loop(CioptNode *node, LoopDetail *loop)
+{
+    if (!node || !loop) return;
+
+    if (node->type == CIOPT_NODE_CALL && node->data.call.name) {
+        if (_is_expensive_call(node->data.call.name)) {
+            /* Add to expensive operations list */
+            if (loop->expensive_count >= loop->expensive_capacity) {
+                size_t new_cap = loop->expensive_capacity ? loop->expensive_capacity * 2 : 4;
+                char **new_ops = (char **)realloc(loop->expensive_operations, 
+                                                   new_cap * sizeof(char *));
+                if (new_ops) {
+                    loop->expensive_operations = new_ops;
+                    loop->expensive_capacity = new_cap;
+                } else {
+                    return; /* realloc failed */
+                }
+            }
+            
+            if (loop->expensive_count < loop->expensive_capacity) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "%s() at line %d", 
+                         node->data.call.name, node->lineno);
+                loop->expensive_operations[loop->expensive_count++] = strdup(buf);
+                loop->has_expensive_operation = true;
+            }
+        }
+    }
+
+    /* Recurse into children */
+    switch (node->type) {
+        case CIOPT_NODE_BLOCK:
+            for (size_t i = 0; i < node->data.block.stmts.count; i++)
+                _find_expensive_calls_in_loop(node->data.block.stmts.nodes[i], loop);
+            break;
+        case CIOPT_NODE_IF:
+            _find_expensive_calls_in_loop(node->data.if_stmt.then_body, loop);
+            _find_expensive_calls_in_loop(node->data.if_stmt.else_body, loop);
+            break;
+        case CIOPT_NODE_FOR:
+            _find_expensive_calls_in_loop(node->data.for_loop.body, loop);
+            break;
+        case CIOPT_NODE_WHILE:
+        case CIOPT_NODE_DO_WHILE:
+            _find_expensive_calls_in_loop(node->data.loop.body, loop);
+            break;
+        case CIOPT_NODE_CALL:
+            for (size_t i = 0; i < node->data.call.args.count; i++)
+                _find_expensive_calls_in_loop(node->data.call.args.nodes[i], loop);
+            break;
+        default:
+            break;
+    }
+}
+
 /* Internal visitor walker for loop detection */
 static void _walk_node(CioptNode *node, LoopDetail **current_stack,
                        size_t stack_depth, LoopAnalysis *analysis)
@@ -488,10 +610,12 @@ static void _walk_node(CioptNode *node, LoopDetail **current_stack,
 
         /* Push onto stack and recurse into body */
         current_stack[stack_depth] = loop;
-        if (node->type == CIOPT_NODE_FOR) {
-            _walk_node(node->data.for_loop.body, current_stack, stack_depth + 1, analysis);
-        } else {
-            _walk_node(node->data.loop.body, current_stack, stack_depth + 1, analysis);
+        CioptNode *body = (node->type == CIOPT_NODE_FOR) ?
+                          node->data.for_loop.body : node->data.loop.body;
+        if (body) {
+            _walk_node(body, current_stack, stack_depth + 1, analysis);
+            /* After walking the body, check for expensive calls inside this loop */
+            _find_expensive_calls_in_loop(body, loop);
         }
     } else {
         /* Recurse into children */
