@@ -26,6 +26,7 @@ typedef struct {
     PatternAnalysis *patterns;
     DataStructureAnalysis *data_structure;
     Severity severity;
+    DeadCodeAnalysis *dead_code;
 } FunctionReport;
 
 typedef struct {
@@ -34,7 +35,6 @@ typedef struct {
     FunctionReport **functions;
     size_t functions_count;
     size_t functions_capacity;
-    DeadCodeAnalysis *dead_code;
     char **parse_errors;
     size_t parse_errors_count;
 } FileReport;

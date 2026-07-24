@@ -23,6 +23,7 @@ void function_report_free(FunctionReport *fr)
     if (fr->complexity) complexity_result_free(fr->complexity);
     if (fr->patterns) pattern_analysis_free(fr->patterns);
     if (fr->data_structure) ds_analysis_free(fr->data_structure);
+    // if (fr->dead_code) dead_code_analysis_free(fr->dead_code);
     free(fr);
 }
 
@@ -42,7 +43,6 @@ void file_report_free(FileReport *fr)
     for (size_t i = 0; i < fr->functions_count; i++)
         function_report_free(fr->functions[i]);
     free(fr->functions);
-    if (fr->dead_code) dead_code_analysis_free(fr->dead_code);
     for (size_t i = 0; i < fr->parse_errors_count; i++)
         free(fr->parse_errors[i]);
     free(fr->parse_errors);
@@ -154,7 +154,6 @@ ComplexityClass analysis_worst_complexity(AnalysisReport *ar)
     }
     return worst;
 }
-
 int analysis_total_issues(AnalysisReport *ar)
 {
     if (!ar) return 0;
@@ -165,8 +164,8 @@ int analysis_total_issues(AnalysisReport *ar)
             FunctionReport *func = fr->functions[i];
             if (func->patterns) total += (int)func->patterns->count;
             if (func->complexity) total += (int)func->complexity->warnings_count;
+            if (func->dead_code) total += (int)func->dead_code->count; /* Counts per function now */
         }
-        if (fr->dead_code) total += (int)fr->dead_code->count;
     }
     return total;
 }

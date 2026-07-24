@@ -42,6 +42,118 @@ static void _collect_func_names(CioptNode *node, char ***names, size_t *count, s
     }
 }
 
+/* =========================================================================
+ * Pass 2: Call Graph Composition (Master Theorem)
+ * ========================================================================= */
+
+/* Helper 1: Find the AST node of a function by name */
+static CioptNode *_find_function_ast(CioptNode *ast_root, const char *name) {
+    if (!ast_root || !name) return NULL;
+    if (ast_root->type == CIOPT_NODE_PROGRAM || ast_root->type == CIOPT_NODE_BLOCK) {
+        for (size_t i = 0; i < ast_root->data.block.stmts.count; i++) {
+            CioptNode *stmt = ast_root->data.block.stmts.nodes[i];
+            if (stmt && stmt->type == CIOPT_NODE_FUNCTION_DEF && stmt->data.func_def.name) {
+                if (strcmp(stmt->data.func_def.name, name) == 0) {
+                    return stmt;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Helper 2: Traverse body to find max complexity of user-defined helper calls */
+static void _find_max_helper_complexity(CioptNode *node, FileReport *fr, ComplexityClass *max_c) {
+    if (!node) return;
+    
+    /* Check if this is a function call */
+    if (node->type == CIOPT_NODE_CALL && node->data.call.name) {
+        for (size_t i = 0; i < fr->functions_count; i++) {
+            FunctionReport *helper = fr->functions[i];
+            /* If the call matches a user-defined function in this file */
+            if (helper->name && strcmp(helper->name, node->data.call.name) == 0 && helper->complexity) {
+                ComplexityClass c = helper->complexity->estimated_complexity;
+                if (complexity_class_rank(c) > complexity_class_rank(*max_c)) {
+                    *max_c = c;
+                }
+                break;
+            }
+        }
+    }
+    
+    /* Recurse into AST children */
+    switch (node->type) {
+        case CIOPT_NODE_BLOCK:
+        case CIOPT_NODE_PROGRAM:
+            for (size_t i = 0; i < node->data.block.stmts.count; i++)
+                _find_max_helper_complexity(node->data.block.stmts.nodes[i], fr, max_c);
+            break;
+        case CIOPT_NODE_IF:
+            if (node->data.if_stmt.then_body)
+                _find_max_helper_complexity(node->data.if_stmt.then_body, fr, max_c);
+            if (node->data.if_stmt.else_body)
+                _find_max_helper_complexity(node->data.if_stmt.else_body, fr, max_c);
+            break;
+        case CIOPT_NODE_FOR:
+            if (node->data.for_loop.body) 
+                _find_max_helper_complexity(node->data.for_loop.body, fr, max_c);
+            break;
+        case CIOPT_NODE_WHILE:
+        case CIOPT_NODE_DO_WHILE:
+            if (node->data.loop.body)
+                _find_max_helper_complexity(node->data.loop.body, fr, max_c);
+            break;
+        case CIOPT_NODE_CALL:
+            for (size_t i = 0; i < node->data.call.args.count; i++)
+                _find_max_helper_complexity(node->data.call.args.nodes[i], fr, max_c);
+            break;
+        default:
+            break;
+    }
+}
+
+/* Helper 3: Pass 2 - Resolve Call Graph using Master Theorem logic */
+static void _resolve_call_graph(FileReport *fr, CioptNode *ast_root) {
+    for (size_t i = 0; i < fr->functions_count; i++) {
+        FunctionReport *func = fr->functions[i];
+        
+        /* Only apply Master Theorem to recursive functions */
+        if (!func->complexity || !func->complexity->recursion_info || 
+            !func->complexity->recursion_info->is_recursive) {
+            continue;
+        }
+        
+        CioptNode *func_ast = _find_function_ast(ast_root, func->name);
+        if (!func_ast || !func_ast->data.func_def.body) continue;
+        
+        /* Find the heaviest helper function called inside this recursive function */
+        ComplexityClass max_helper_c = COMPLEXITY_O_1;
+        _find_max_helper_complexity(func_ast->data.func_def.body, fr, &max_helper_c);
+        
+        /* Master Theorem: Tree Depth * Work per Node Level */
+        if (max_helper_c != COMPLEXITY_O_1) {
+            ComplexityClass current = func->complexity->estimated_complexity;
+            
+            /* Use your existing polynomial math: e.g., O(log n) * O(n) = O(n log n) */
+            ComplexityClass new_c = combine_complexities(current, max_helper_c, "multiply");
+            
+            if (complexity_class_rank(new_c) > complexity_class_rank(current)) {
+                func->complexity->estimated_complexity = new_c;
+                
+                char desc[256];
+                snprintf(desc, sizeof(desc), 
+                         "Master Theorem applied: %s recursion depth * %s helper work = %s",
+                         complexity_class_to_string(current),
+                         complexity_class_to_string(max_helper_c),
+                         complexity_class_to_string(new_c));
+                         
+                complexity_result_add_explanation(func->complexity, "call_graph", new_c, 
+                                                  func->lineno, desc, "");
+            }
+        }
+    }
+}
+
 /* Analyze a function AST node and produce a FunctionReport */
 static FunctionReport *_analyze_function(CioptNode *func_node,
                                            AnalysisConfig *config,
@@ -66,10 +178,13 @@ static FunctionReport *_analyze_function(CioptNode *func_node,
     /* Data structure analysis */
     if (config->detect_data_structure_issues)
         fr->data_structure = detect_data_structure_issues(func_node);
+    
+    /* Dead code detection */
+    if (config->detect_dead_code)
+        fr->dead_code = detect_dead_code(func_node);
 
     /* Severity */
     fr->severity = determine_severity(fr, config);
-
     return fr;
 }
 
@@ -107,39 +222,14 @@ static FileReport *_analyze_file(SourceFile *sf, AnalysisConfig *config)
         }
     }
 
-    /* Dead code detection */
-    if (config->detect_dead_code) {
-        /* Run on each function for unreachable code */
-        for (size_t i = 0; i < ast->data.block.stmts.count; i++) {
-            CioptNode *stmt = ast->data.block.stmts.nodes[i];
-            if (stmt->type == CIOPT_NODE_FUNCTION_DEF) {
-                DeadCodeAnalysis *dca = detect_dead_code(stmt);
-                if (dca) {
-                    if (!fr->dead_code) {
-                        fr->dead_code = dca;
-                    } else {
-                        for (size_t k = 0; k < dca->count; k++) {
-                            dead_code_analysis_add(fr->dead_code,
-                                dca->items[k].kind,
-                                dca->items[k].lineno,
-                                dca->items[k].end_lineno,
-                                dca->items[k].name,
-                                dca->items[k].description,
-                                dca->items[k].suggestion);
-                        }
-                        dead_code_analysis_free(dca);
-                    }
-                }
-            }
-        }
-    }
-
     /* Cleanup */
     for (size_t i = 0; i < func_count; i++)
         free(all_func_names[i]);
     free(all_func_names);
-    ciopt_node_free(ast);
 
+    _resolve_call_graph(fr, ast);
+
+    ciopt_node_free(ast);
     return fr;
 }
 
