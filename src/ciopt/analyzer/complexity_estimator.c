@@ -210,29 +210,49 @@ static ComplexityClass _estimate_loop_complexity(LoopAnalysis *loop_analysis,
         /* Check for expensive calls inside this loop */
         /* (Simplified: we just use the loop estimate) */
 
-        /* For nested loops, multiply */
-        ComplexityClass total_c = loop_c;
-        LoopDetail *current = loop;
-        while (current->children_count > 0) {
-            /* Take the worst child */
-            ComplexityClass child_max = COMPLEXITY_O_1;
-            for (size_t c = 0; c < current->children_count; c++) {
-                ComplexityClass child_c = estimate_loop_iterations(current->children[c]);
-                if (complexity_class_rank(child_c) > complexity_class_rank(child_max))
-                    child_max = child_c;
+        /* For nested loops, multiply all sibling loops at each level */
+        ComplexityClass total_c = COMPLEXITY_O_1;
+        
+        /* Process all loops at the current nesting level */
+        for (size_t c = 0; c < loop->children_count; c++) {
+            ComplexityClass child_c = estimate_loop_iterations(loop->children[c]);
+            total_c = combine_complexities(total_c, child_c, "multiply");
+        }
+        
+        /* Now check deeper nesting - find max depth path */
+        LoopDetail *deepest = NULL;
+        int max_depth = 0;
+        for (size_t c = 0; c < loop->children_count; c++) {
+            int d = loop->children[c]->depth;
+            if (d > max_depth) {
+                max_depth = d;
+                deepest = loop->children[c];
             }
-            total_c = combine_complexities(total_c, child_max, "multiply");
-
-            /* Descend into the worst child for further nesting */
+        }
+        
+        /* Traverse down the deepest path, multiplying siblings at each level */
+        while (deepest && deepest->children_count > 0) {
+            ComplexityClass level_max = COMPLEXITY_O_1;
+            
+            /* Find all siblings at this depth and get their combined complexity */
+            for (size_t c = 0; c < deepest->children_count; c++) {
+                ComplexityClass child_c = estimate_loop_iterations(deepest->children[c]);
+                if (complexity_class_rank(child_c) > complexity_class_rank(level_max))
+                    level_max = child_c;
+            }
+            
+            if (complexity_class_rank(level_max) > complexity_class_rank(COMPLEXITY_O_1))
+                total_c = combine_complexities(total_c, level_max, "multiply");
+            
+            /* Go to first child with children */
             LoopDetail *next = NULL;
-            for (size_t c = 0; c < current->children_count; c++) {
-                if (current->children[c]->children_count > 0) {
-                    next = current->children[c];
+            for (size_t c = 0; c < deepest->children_count; c++) {
+                if (deepest->children[c]->children_count > 0) {
+                    next = deepest->children[c];
                     break;
                 }
             }
-            current = next;
-            if (!current) break;
+            deepest = next;
         }
 
         char desc[256];
@@ -340,20 +360,24 @@ ComplexityResult *estimate_complexity(CioptNode *func_node,
         call_complexity, "max");
     result->estimated_complexity = overall;
 
-    /* Step 5: Confidence */
+    /* Step 5: Confidence - higher confidence when analysis is clearer */
     if (result->loop_analysis->total_loops == 0 &&
         (!result->recursion_info || !result->recursion_info->is_recursive))
-        result->confidence = 0.95;
+        result->confidence = 0.95;  /* Simple code, high confidence */
     else if (result->loop_analysis->max_depth <= 2 &&
              (!result->recursion_info || !result->recursion_info->is_recursive))
-        result->confidence = 0.85;
+        result->confidence = 0.85;  /* Shallow loops, good confidence */
+    else if (result->recursion_info && result->recursion_info->is_recursive &&
+             result->recursion_info->has_base_case &&
+             result->recursion_info->has_halving_pattern)
+        result->confidence = 0.80;  /* Clear recursive pattern with base case and halving */
     else if (result->recursion_info && result->recursion_info->is_recursive &&
              result->recursion_info->has_base_case)
-        result->confidence = 0.70;
+        result->confidence = 0.70;  /* Recursive with base case */
     else if (result->recursion_info && result->recursion_info->is_recursive)
-        result->confidence = 0.50;
+        result->confidence = 0.50;  /* Recursive without clear base case */
     else
-        result->confidence = 0.75;
+        result->confidence = 0.75;  /* Default */
 
     /* Bottleneck */
     if (result->explanations_count > 0) {
