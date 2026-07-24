@@ -27,7 +27,7 @@ LoopDetail *loop_detail_create(LoopKind kind, int lineno)
 {
     LoopDetail *loop = (LoopDetail *)calloc(1, sizeof(LoopDetail));
     if (!loop) return NULL;
-    
+
     loop->kind = kind;
     loop->lineno = lineno;
     loop->end_lineno = lineno;
@@ -50,20 +50,20 @@ LoopDetail *loop_detail_create(LoopKind kind, int lineno)
     loop->expensive_count = 0;
     loop->expensive_capacity = 0;
     loop->node = NULL;
-    
+
     return loop;
 }
 
 void loop_detail_free(LoopDetail *loop)
 {
     if (!loop) return;
-    
+
     /* Free children recursively */
     for (size_t i = 0; i < loop->children_count; i++) {
         loop_detail_free(loop->children[i]);
     }
     free(loop->children);
-    
+
     /* Free variables */
     for (size_t i = 0; i < loop->variables_count; i++) {
         free(loop->variables[i].name);
@@ -71,13 +71,13 @@ void loop_detail_free(LoopDetail *loop)
         free(loop->variables[i].variable_bound);
     }
     free(loop->variables);
-    
+
     /* Free expensive operations */
     for (size_t i = 0; i < loop->expensive_count; i++) {
         free(loop->expensive_operations[i]);
     }
     free(loop->expensive_operations);
-    
+
     free(loop->invariant_lines);
     free(loop);
 }
@@ -85,7 +85,7 @@ void loop_detail_free(LoopDetail *loop)
 int loop_detail_add_child(LoopDetail *parent, LoopDetail *child)
 {
     if (!parent || !child) return -1;
-    
+
     if (parent->children_count >= parent->children_capacity) {
         size_t new_cap = parent->children_capacity ? parent->children_capacity * 2 : 4;
         LoopDetail **new_children = (LoopDetail **)realloc(
@@ -94,18 +94,18 @@ int loop_detail_add_child(LoopDetail *parent, LoopDetail *child)
         parent->children = new_children;
         parent->children_capacity = new_cap;
     }
-    
+
     parent->children[parent->children_count++] = child;
     child->parent = parent;
     child->depth = parent->depth + 1;
-    
+
     return 0;
 }
 
 int loop_detail_add_variable(LoopDetail *loop, const char *name, int lineno)
 {
     if (!loop) return -1;
-    
+
     if (loop->variables_count >= loop->variables_capacity) {
         size_t new_cap = loop->variables_capacity ? loop->variables_capacity * 2 : 4;
         LoopVariable *new_vars = (LoopVariable *)realloc(
@@ -114,7 +114,7 @@ int loop_detail_add_variable(LoopDetail *loop, const char *name, int lineno)
         loop->variables = new_vars;
         loop->variables_capacity = new_cap;
     }
-    
+
     LoopVariable *var = &loop->variables[loop->variables_count++];
     memset(var, 0, sizeof(LoopVariable));
     var->name = name ? strdup(name) : NULL;
@@ -124,7 +124,7 @@ int loop_detail_add_variable(LoopDetail *loop, const char *name, int lineno)
     var->has_variable_bound = false;
     var->is_halving = false;
     var->is_doubling = false;
-    
+
     return 0;
 }
 
@@ -132,23 +132,25 @@ LoopAnalysis *loop_analysis_create(const char *function_name)
 {
     LoopAnalysis *analysis = (LoopAnalysis *)calloc(1, sizeof(LoopAnalysis));
     if (!analysis) return NULL;
-    
+
     analysis->function_name = function_name ? strdup(function_name) : NULL;
     analysis->loops = NULL;
     analysis->loops_count = 0;
     analysis->loops_capacity = 0;
     analysis->max_depth = 0;
     analysis->total_loops = 0;
-    
+
     return analysis;
 }
 
 void loop_analysis_free(LoopAnalysis *analysis)
 {
     if (!analysis) return;
-    
+
     for (size_t i = 0; i < analysis->loops_count; i++) {
-        loop_detail_free(analysis->loops[i]);
+        if (analysis->loops[i]->parent == NULL) {
+            loop_detail_free(analysis->loops[i]);
+        }
     }
     free(analysis->loops);
     free(analysis->function_name);
@@ -337,7 +339,46 @@ static bool _has_binary_search_pattern(CioptNode *node)
     return has_mid_calc || has_bound_update;
 }
 
-static bool _has_halving_expr(CioptNode *node)
+static bool _is_variable_halving(CioptNode *assign_node, const char *loop_var_name)
+{
+    if (!assign_node || !loop_var_name) return false;
+
+    if (assign_node->type != CIOPT_NODE_ASSIGNMENT) return false;
+
+    CioptNode *target = assign_node->data.assignment.target;
+    CioptNode *value = assign_node->data.assignment.value;
+
+    if (!target || !value) return false;
+
+    if (target->type != CIOPT_NODE_IDENTIFIER) return false;
+    const char *target_name = target->data.identifier.name;
+    if (!target_name || strcmp(target_name, loop_var_name) != 0) return false;
+
+    if (value->type == CIOPT_NODE_BINARY_OP) {
+        CioptNode *bin = value;
+        if (!bin->data.binary_op.op) return false;
+
+        if (strcmp(bin->data.binary_op.op, "/") == 0 ||
+            strcmp(bin->data.binary_op.op, ">>") == 0) {
+            CioptNode *left = bin->data.binary_op.left;
+            CioptNode *right = bin->data.binary_op.right;
+
+            if (left && left->type == CIOPT_NODE_IDENTIFIER) {
+                const char *left_name = left->data.identifier.name;
+                if (left_name && strcmp(left_name, loop_var_name) == 0) {
+                    if (right && right->type == CIOPT_NODE_INT_LITERAL) {
+                        int val = right->data.int_literal.value;
+                        if (val > 1) return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool _has_halving_expr_in_block(CioptNode *node, const char *loop_var_name)
 {
     if (!node) return false;
 
@@ -352,23 +393,31 @@ static bool _has_halving_expr(CioptNode *node)
             CioptNode *bin = node->data.assignment.value;
             if (bin->data.binary_op.op &&
                 (strcmp(bin->data.binary_op.op, "/") == 0 ||
-                 strcmp(bin->data.binary_op.op, ">>") == 0))
+                 strcmp(bin->data.binary_op.op, ">>") == 0)) {
+                if (loop_var_name && _is_variable_halving(node, loop_var_name))
+                    return true;
                 return true;
+            }
         }
     }
 
     if (node->type == CIOPT_NODE_BLOCK) {
         for (size_t i = 0; i < node->data.block.stmts.count; i++) {
-            if (_has_halving_expr(node->data.block.stmts.nodes[i])) return true;
+            if (_has_halving_expr_in_block(node->data.block.stmts.nodes[i], loop_var_name)) return true;
         }
     } else if (node->type == CIOPT_NODE_EXPR_STMT) {
-        return _has_halving_expr(node->data.expr_stmt.expr);
+        return _has_halving_expr_in_block(node->data.expr_stmt.expr, loop_var_name);
     } else if (node->type == CIOPT_NODE_IF) {
-        if (_has_halving_expr(node->data.if_stmt.then_body)) return true;
-        if (_has_halving_expr(node->data.if_stmt.else_body)) return true;
+        if (_has_halving_expr_in_block(node->data.if_stmt.then_body, loop_var_name)) return true;
+        if (_has_halving_expr_in_block(node->data.if_stmt.else_body, loop_var_name)) return true;
     }
 
     return false;
+}
+
+static bool _has_halving_expr(CioptNode *node)
+{
+    return _has_halving_expr_in_block(node, NULL);
 }
 
 static bool _has_doubling_expr(CioptNode *node)
@@ -409,6 +458,10 @@ bool check_halving_pattern(CioptNode *node)
 {
     if (!node) return false;
 
+    if (node->type == CIOPT_NODE_FOR) {
+        if (_has_halving_expr(node->data.for_loop.update)) return true;
+    }
+
     CioptNode *body = NULL;
     if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) body = node->data.loop.body;
     else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
@@ -425,6 +478,10 @@ bool check_halving_pattern(CioptNode *node)
 bool check_doubling_pattern(CioptNode *node)
 {
     if (!node) return false;
+
+    if (node->type == CIOPT_NODE_FOR) {
+        if (_has_doubling_expr(node->data.for_loop.update)) return true;
+    }
 
     CioptNode *body = NULL;
     if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) body = node->data.loop.body;
@@ -521,7 +578,7 @@ static void _find_expensive_calls_in_loop(CioptNode *node, LoopDetail *loop)
             /* Add to expensive operations list */
             if (loop->expensive_count >= loop->expensive_capacity) {
                 size_t new_cap = loop->expensive_capacity ? loop->expensive_capacity * 2 : 4;
-                char **new_ops = (char **)realloc(loop->expensive_operations, 
+                char **new_ops = (char **)realloc(loop->expensive_operations,
                                                    new_cap * sizeof(char *));
                 if (new_ops) {
                     loop->expensive_operations = new_ops;
@@ -530,10 +587,10 @@ static void _find_expensive_calls_in_loop(CioptNode *node, LoopDetail *loop)
                     return; /* realloc failed */
                 }
             }
-            
+
             if (loop->expensive_count < loop->expensive_capacity) {
                 char buf[128];
-                snprintf(buf, sizeof(buf), "%s() at line %d", 
+                snprintf(buf, sizeof(buf), "%s() at line %d",
                          node->data.call.name, node->lineno);
                 loop->expensive_operations[loop->expensive_count++] = strdup(buf);
                 loop->has_expensive_operation = true;

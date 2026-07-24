@@ -6,9 +6,11 @@
 
 /* Known C standard library function complexities */
 static const char *_known_o_n_log_n[] = {
-    "qsort", "bsearch", "heapsort", "mergesort", NULL
+    "qsort", "heapsort", "mergesort", NULL
 };
-
+static const char *_known_o_log_n[] = {
+    "bsearch", NULL
+};
 
 static const char *_known_o_n[] = {
     "strlen", "strcpy", "strcmp", "memcpy", "memset",
@@ -17,13 +19,13 @@ static const char *_known_o_n[] = {
     "fwrite", "strdup", "strndup",
     "strchr", "strrchr", "strstr", "memchr",
     "index", "rindex",
-    "tolower", "toupper",
     "calloc", "malloc", "realloc",
     NULL
 };
 static const char *_known_o_1[] = {
     "sizeof", "free",
     "abs", "labs", "llabs",
+    "tolower", "toupper",
     "isalnum", "isalpha", "iscntrl", "isdigit",
     "isgraph", "islower", "isprint", "ispunct",
     "isspace", "isupper", "isxdigit",
@@ -37,6 +39,10 @@ ComplexityClass get_known_function_complexity(const char *func_name)
     for (int i = 0; _known_o_n_log_n[i]; i++) {
         if (strcmp(func_name, _known_o_n_log_n[i]) == 0)
             return COMPLEXITY_O_N_LOG_N;
+    }
+    for (int i = 0; _known_o_log_n[i]; i++) {
+        if (strcmp(func_name, _known_o_log_n[i]) == 0)
+            return COMPLEXITY_O_LOG_N;
     }
     for (int i = 0; _known_o_n[i]; i++) {
         if (strcmp(func_name, _known_o_n[i]) == 0)
@@ -180,8 +186,33 @@ static void _analyze_body_calls(CioptNode *node, ComplexityResult *result,
                 _analyze_body_calls(node->data.block.stmts.nodes[i], result, call_complexity);
             break;
         case CIOPT_NODE_IF:
+            _analyze_body_calls(node->data.if_stmt.condition, result, call_complexity);
             _analyze_body_calls(node->data.if_stmt.then_body, result, call_complexity);
             _analyze_body_calls(node->data.if_stmt.else_body, result, call_complexity);
+            break;
+        case CIOPT_NODE_FOR:
+            _analyze_body_calls(node->data.for_loop.init, result, call_complexity);
+            _analyze_body_calls(node->data.for_loop.condition, result, call_complexity);
+            _analyze_body_calls(node->data.for_loop.update, result, call_complexity);
+            _analyze_body_calls(node->data.for_loop.body, result, call_complexity);
+            break;
+        case CIOPT_NODE_WHILE:
+        case CIOPT_NODE_DO_WHILE:
+            _analyze_body_calls(node->data.loop.condition, result, call_complexity);
+            _analyze_body_calls(node->data.loop.body, result, call_complexity);
+            break;
+        case CIOPT_NODE_RETURN:
+            _analyze_body_calls(node->data.return_stmt.value, result, call_complexity);
+            break;
+        case CIOPT_NODE_EXPR_STMT:
+            _analyze_body_calls(node->data.expr_stmt.expr, result, call_complexity);
+            break;
+        case CIOPT_NODE_BINARY_OP:
+            _analyze_body_calls(node->data.binary_op.left, result, call_complexity);
+            _analyze_body_calls(node->data.binary_op.right, result, call_complexity);
+            break;
+        case CIOPT_NODE_ASSIGNMENT:
+            _analyze_body_calls(node->data.assignment.value, result, call_complexity);
             break;
         case CIOPT_NODE_CALL:
             for (size_t i = 0; i < node->data.call.args.count; i++)
@@ -190,6 +221,90 @@ static void _analyze_body_calls(CioptNode *node, ComplexityResult *result,
         default:
             break;
     }
+}
+
+/* Find the maximum *algorithmic* complexity of function calls inside this loop.
+ * Only considers O(log n) and O(n log n) functions (search/sort algorithms).
+ * O(n) string/IO ops are already handled by has_expensive_operation in loop_detector. */
+static ComplexityClass _find_max_known_call_complexity(CioptNode *node)
+{
+    if (!node) return COMPLEXITY_O_1;
+
+    ComplexityClass max_c = COMPLEXITY_O_1;
+
+    if (node->type == CIOPT_NODE_CALL && node->data.call.name) {
+        ComplexityClass known = get_known_function_complexity(node->data.call.name);
+        /* Only multiply by algorithmic functions (log n, n log n), not O(n) I/O */
+        if (known != COMPLEXITY_UNKNOWN && known != COMPLEXITY_O_N && known != COMPLEXITY_O_1) {
+            max_c = known;
+        }
+    }
+
+    /* Recurse into children except loops */
+    switch (node->type) {
+        case CIOPT_NODE_BLOCK:
+            for (size_t i = 0; i < node->data.block.stmts.count; i++) {
+                ComplexityClass child_c = _find_max_known_call_complexity(node->data.block.stmts.nodes[i]);
+                if (complexity_class_compare(child_c, max_c) > 0)
+                    max_c = child_c;
+            }
+            break;
+        case CIOPT_NODE_IF: {
+            if (node->data.if_stmt.condition) {
+                ComplexityClass cond_c = _find_max_known_call_complexity(node->data.if_stmt.condition);
+                if (complexity_class_compare(cond_c, max_c) > 0)
+                    max_c = cond_c;
+            }
+            ComplexityClass then_c = _find_max_known_call_complexity(node->data.if_stmt.then_body);
+            ComplexityClass else_c = _find_max_known_call_complexity(node->data.if_stmt.else_body);
+            if (complexity_class_compare(then_c, max_c) > 0)
+                max_c = then_c;
+            if (complexity_class_compare(else_c, max_c) > 0)
+                max_c = else_c;
+            break;
+        }
+        case CIOPT_NODE_RETURN:
+            if (node->data.return_stmt.value) {
+                ComplexityClass ret_c = _find_max_known_call_complexity(node->data.return_stmt.value);
+                if (complexity_class_compare(ret_c, max_c) > 0)
+                    max_c = ret_c;
+            }
+            break;
+        case CIOPT_NODE_EXPR_STMT:
+            if (node->data.expr_stmt.expr) {
+                ComplexityClass expr_c = _find_max_known_call_complexity(node->data.expr_stmt.expr);
+                if (complexity_class_compare(expr_c, max_c) > 0)
+                    max_c = expr_c;
+            }
+            break;
+        case CIOPT_NODE_BINARY_OP: {
+            ComplexityClass left_c = _find_max_known_call_complexity(node->data.binary_op.left);
+            ComplexityClass right_c = _find_max_known_call_complexity(node->data.binary_op.right);
+            if (complexity_class_compare(left_c, max_c) > 0)
+                max_c = left_c;
+            if (complexity_class_compare(right_c, max_c) > 0)
+                max_c = right_c;
+            break;
+        }
+        case CIOPT_NODE_ASSIGNMENT:
+            if (node->data.assignment.value) {
+                ComplexityClass val_c = _find_max_known_call_complexity(node->data.assignment.value);
+                if (complexity_class_compare(val_c, max_c) > 0)
+                    max_c = val_c;
+            }
+            break;
+        case CIOPT_NODE_CALL:
+            for (size_t i = 0; i < node->data.call.args.count; i++) {
+                ComplexityClass arg_c = _find_max_known_call_complexity(node->data.call.args.nodes[i]);
+                if (complexity_class_compare(arg_c, max_c) > 0)
+                    max_c = arg_c;
+            }
+            break;
+        default:
+            break;
+    }
+
+    return max_c;
 }
 
 static ComplexityClass _calculate_single_loop_complexity(LoopDetail *loop)
@@ -202,6 +317,17 @@ static ComplexityClass _calculate_single_loop_complexity(LoopDetail *loop)
     if (loop->has_expensive_operation && self_c == COMPLEXITY_O_N) {
         self_c = COMPLEXITY_O_N_SQUARED;
     }
+
+    /* Multiply iteration complexity by the complexity of any known function call inside the loop */
+    CioptNode *body = NULL;
+    if (loop->node) {
+        if (loop->node->type == CIOPT_NODE_WHILE || loop->node->type == CIOPT_NODE_DO_WHILE)
+            body = loop->node->data.loop.body;
+        else if (loop->node->type == CIOPT_NODE_FOR)
+            body = loop->node->data.for_loop.body;
+    }
+    ComplexityClass max_call_c = _find_max_known_call_complexity(body);
+    self_c = combine_complexities(self_c, max_call_c, "multiply");
 
     if (loop->children_count == 0) return self_c;
 

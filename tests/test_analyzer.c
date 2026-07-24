@@ -195,6 +195,55 @@ static void test_reporters(void)
     config_free(config);
 }
 
+static void test_nlogn_nested_loops(void)
+{
+    const char *code = 
+        "void executeNLogN(int n) {\n"
+        "    int operationCount = 0;\n"
+        "    for (int i = 0; i < n; i++) {\n"
+        "        for (int j = n; j > 0; j = j / 2) {\n"
+        "            operationCount++;\n"
+        "        }\n"
+        "    }\n"
+        "}\n";
+
+    AnalysisConfig *config = config_create_default();
+    AnalysisReport *report = ciopt_analyze_source(code, "test_nlogn_loops.c", config);
+
+    TEST("nlogn nested loop report non-null", report != NULL);
+    if (report && report->files_count > 0 && report->files[0]->functions_count > 0) {
+        FunctionReport *fr = report->files[0]->functions[0];
+        TEST("nested loop complexity is O(n log n)", 
+             fr->complexity && fr->complexity->estimated_complexity == COMPLEXITY_O_N_LOG_N);
+    }
+
+    analysis_report_free(report);
+    config_free(config);
+}
+
+static void test_nlogn_loop_with_call(void)
+{
+    const char *code = 
+        "void loop_with_bsearch(int *arr, int n, int *queries, int q) {\n"
+        "    for (int i = 0; i < q; i++) {\n"
+        "        bsearch(&queries[i], arr, n, sizeof(int), NULL);\n"
+        "    }\n"
+        "}\n";
+
+    AnalysisConfig *config = config_create_default();
+    AnalysisReport *report = ciopt_analyze_source(code, "test_nlogn_call.c", config);
+
+    TEST("nlogn loop with call report non-null", report != NULL);
+    if (report && report->files_count > 0 && report->files[0]->functions_count > 0) {
+        FunctionReport *fr = report->files[0]->functions[0];
+        TEST("loop with bsearch complexity is O(n log n)", 
+             fr->complexity && fr->complexity->estimated_complexity == COMPLEXITY_O_N_LOG_N);
+    }
+
+    analysis_report_free(report);
+    config_free(config);
+}
+
 int main(void)
 {
     printf("=== Running CiOpt Comprehensive Analyzer Tests ===\n\n");
@@ -206,6 +255,8 @@ int main(void)
     test_recursion();
     test_anti_patterns();
     test_reporters();
+    test_nlogn_nested_loops();
+    test_nlogn_loop_with_call();
 
     printf("\n=== Summary: %d passed, %d failed ===\n", tests_passed, tests_failed);
     return tests_failed > 0 ? 1 : 0;
