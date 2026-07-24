@@ -1,33 +1,41 @@
 ```
+# Executables
+ciopt
+
 # Compiled and build artifacts
 *.o
 *.obj
-*.a
-*.so
-*.dll
+*.out
 *.exe
-*.pyc
-__pycache__/
+*.dll
+*.so
+*.a
 
 # Dependencies
-node_modules/
-venv/
 .venv/
-.env
-.env.local
-.env.*
+venv/
+__pycache__/
+node_modules/
+dist/
+build/
+target/
 
 # Logs and temp files
 *.log
 *.tmp
 *.swp
 
+# Environment
+.env
+.env.local
+*.env.*
+
 # Editors
 .vscode/
 .idea/
 
-# Build directories
-build/
-dist/
-target/
+# System files
+.DS_Store
+Thumbs.db
+
 ```
