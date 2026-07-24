@@ -1,5 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/Low%20Level-Coder%20❤️-1A1A2E?logo=c&logoColor=white" alt="Low Level Coder" />
   <img src="https://img.shields.io/badge/C-11-00599C?logo=c" alt="C11" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT" />
   <img src="https://img.shields.io/badge/parser-Tree--sitter-blueviolet?logo=github" alt="Tree-sitter" />
