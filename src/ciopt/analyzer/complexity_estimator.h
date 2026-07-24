@@ -29,8 +29,6 @@ typedef struct {
     char *description;
     char *detail;
 } ComplexityExplanation;
-
-/* Result of complexity estimation for a single function */
 typedef struct {
     char *function_name;
     int lineno;
@@ -70,6 +68,12 @@ ComplexityResult *estimate_complexity(CioptNode *func_node,
 
 /* Known C function complexities */
 ComplexityClass get_known_function_complexity(const char *func_name);
+
+/* Public API to add explanations (used for Call Graph resolution) */
+void complexity_result_add_explanation(ComplexityResult *r, const char *source,
+                                       ComplexityClass c, int lineno,
+                                       const char *desc, const char *detail);                                       
+/* Result of complexity estimation for a single function */
 
 #ifdef __cplusplus
 }

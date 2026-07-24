@@ -8,6 +8,8 @@
 static const char *_known_o_n_log_n[] = {
     "qsort", "bsearch", "heapsort", "mergesort", NULL
 };
+
+
 static const char *_known_o_n[] = {
     "strlen", "strcpy", "strcmp", "memcpy", "memset",
     "atoi", "atof", "printf", "fprintf", "sprintf",
@@ -371,4 +373,14 @@ ComplexityResult *estimate_complexity(CioptNode *func_node,
     }
 
     return result;
+}
+
+/* =========================================================================
+ * Public API to add explanations (used for Call Graph resolution)
+ * ========================================================================= */
+void complexity_result_add_explanation(ComplexityResult *r, const char *source,
+                                       ComplexityClass c, int lineno,
+                                       const char *desc, const char *detail)
+{
+    _add_explanation(r, source, c, lineno, desc, detail);
 }
