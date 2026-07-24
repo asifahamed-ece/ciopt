@@ -60,15 +60,15 @@ const char *save_html_report(AnalysisReport *report, const char *output_path)
     fprintf(fp, "<div class=\"summary\">\n");
     fprintf(fp, "<h2>Summary</h2>\n");
     fprintf(fp, "<div class=\"summary-grid\">\n");
-    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>");
-    fprintf(fp, "<div class=\"stat-label\">Files</div></div>\n", (int)report->files_count);
-    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>");
-    fprintf(fp, "<div class=\"stat-label\">Functions</div></div>\n", analysis_total_functions(report));
-    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%s</div>");
-    fprintf(fp, "<div class=\"stat-label\">Worst Complexity</div></div>\n",
+    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>"
+            "<div class=\"stat-label\">Files</div></div>\n", (int)report->files_count);
+    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>"
+            "<div class=\"stat-label\">Functions</div></div>\n", analysis_total_functions(report));
+    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%s</div>"
+            "<div class=\"stat-label\">Worst Complexity</div></div>\n",
             complexity_class_to_string(analysis_worst_complexity(report)));
-    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>");
-    fprintf(fp, "<div class=\"stat-label\">Issues</div></div>\n", analysis_total_issues(report));
+    fprintf(fp, "  <div class=\"stat\"><div class=\"stat-value\">%d</div>"
+            "<div class=\"stat-label\">Issues</div></div>\n", analysis_total_issues(report));
     fprintf(fp, "</div></div>\n");
 
     /* File sections */

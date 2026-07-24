@@ -1,17 +1,50 @@
-# Build
-build/
-ciopt.exe
-ciopt
+```
+# Compiled and build artifacts
+*.o
+*.obj
+*.out
+*.a
+*.so
+*.dll
+*.exe
 
-# IDE
-.vscode/
-.idea/
+# Dependencies
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.class
+
+# Logs and temp files
+*.log
+*.tmp
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Environment
+.env
+.env.local
+*.env.*
 
-# Vendor (Tree-sitter is cloned separately)
-vendor/tree-sitter/
+# Editors
+.vscode/
+.idea/
+
+# Build directories
+build/
+dist/
+target/
+*.so
+*.dylib
+*.dll
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# MyPy
+.mypy_cache/
+```

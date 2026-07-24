@@ -19,7 +19,18 @@ static void _escape_json(StringBuilder *sb, const char *str)
             case '\n': sb_append(sb, "\\n"); break;
             case '\r': sb_append(sb, "\\r"); break;
             case '\t': sb_append(sb, "\\t"); break;
-            default:   sb_append_char(sb, *p); break;
+            case '\b': sb_append(sb, "\\b"); break;
+            case '\f': sb_append(sb, "\\f"); break;
+            default:
+                /* Escape control characters (0x00-0x1F) as unicode */
+                if ((unsigned char)*p < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)*p);
+                    sb_append(sb, buf);
+                } else {
+                    sb_append_char(sb, *p);
+                }
+                break;
         }
     }
     sb_append_char(sb, '"');

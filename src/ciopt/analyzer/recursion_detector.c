@@ -11,6 +11,7 @@ RecursionInfo *recursion_info_create(const char *func_name, int lineno)
     info->lineno = lineno;
     info->end_lineno = lineno;
     info->depth_pattern = strdup("linear");
+    info->has_halving_pattern = false;  /* Initialize to false */
     return info;
 }
 
@@ -37,12 +38,12 @@ static int _count_recursive_calls(CioptNode *node, const char *func_name)
     int count = 0;
 
     if (node->type == CIOPT_NODE_CALL) {
-        if (node->data.call.name && strcmp(node->data.call.name, func_name) == 0)
-            count++;
-        /* Also check callee */
-        if (node->data.call.callee &&
-            node->data.call.callee->type == CIOPT_NODE_IDENTIFIER &&
-            strcmp(node->data.call.callee->data.identifier.name, func_name) == 0)
+        const char *call_name = node->data.call.name;
+        if (!call_name && node->data.call.callee && 
+            node->data.call.callee->type == CIOPT_NODE_IDENTIFIER)
+            call_name = node->data.call.callee->data.identifier.name;
+        
+        if (call_name && strcmp(call_name, func_name) == 0)
             count++;
     }
 
@@ -182,8 +183,8 @@ static bool _has_division_by_constant(CioptNode *node, int divisor)
             if (node->data.binary_op.right->data.int_literal.value == divisor)
                 return true;
         }
-        /* Also count any division as halving for binary search detection */
-        return true;
+        /* Only count as halving if it's actually dividing by the divisor (e.g., 2) */
+        return false;
     }
     
     /* Recurse */
@@ -241,6 +242,7 @@ static void _analyze_depth_pattern(CioptNode *node, const char *func_name,
     if (_has_division_by_constant(node, 2) && info->is_recursive) {
         free(info->depth_pattern);
         info->depth_pattern = strdup("logarithmic");
+        info->has_halving_pattern = true;
         return;
     }
 

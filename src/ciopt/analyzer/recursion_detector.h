@@ -34,6 +34,7 @@ typedef struct {
     bool can_be_memoized;
     char *memoization_reason;
     bool has_overlapping_subproblems;
+    bool has_halving_pattern;   /* true if recursion uses n/2 pattern (binary search) */
     char *depth_pattern;        /* "linear", "logarithmic", "exponential" */
 } RecursionInfo;
 
