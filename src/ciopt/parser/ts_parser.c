@@ -11,7 +11,6 @@ extern const TSLanguage *tree_sitter_c(void);
 
 /* Forward declarations for CST walker */
 static CioptNode *_walk_ts_node(TSNode node, const char *source);
-static CioptNode *_walk_ts_children(TSNode node, const char *source);
 static const char *_ts_node_type(TSNode node);
 
 /* Parse C source code into our AST */
@@ -90,12 +89,6 @@ static int _ts_end_line(TSNode node)
     return (int)end.row + 1;
 }
 
-static int _ts_start_col(TSNode node)
-{
-    TSPoint start = ts_node_start_point(node);
-    return (int)start.column;
-}
-
 static char *_ts_node_text(TSNode node, const char *source)
 {
     uint32_t start = ts_node_start_byte(node);
@@ -160,19 +153,16 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
     }
 
     if (strcmp(type, "declaration") == 0) {
-        /* Could be variable declaration or function declaration */
+        /* Check if it's a function declaration vs variable declaration */
         uint32_t nchild = ts_node_named_child_count(node);
         for (uint32_t i = 0; i < nchild; i++) {
             TSNode child = ts_node_named_child(node, i);
             const char *child_type = _ts_node_type(child);
-            if (strcmp(child_type, "function_declarator") == 0 ||
-                strcmp(child_type, "function_declarator") == 0) {
-                /* Function declaration (prototype) */
+            if (strcmp(child_type, "function_declarator") == 0) {
                 CioptNode *func = ciopt_node_create(CIOPT_NODE_FUNCTION_DECL, lineno);
                 if (!func) return NULL;
                 func->end_lineno = end_lineno;
 
-                /* Extract name */
                 uint32_t nc = ts_node_named_child_count(child);
                 for (uint32_t j = 0; j < nc; j++) {
                     TSNode c = ts_node_named_child(child, j);
@@ -185,9 +175,51 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
                     func->data.func_decl.name = strdup("<unknown>");
                 return func;
             }
+            if (strcmp(child_type, "init_declarator") == 0) {
+                return _walk_ts_node(child, source);
+            }
         }
-        /* Skip other declarations for now */
+        for (uint32_t i = 0; i < nchild; i++) {
+            TSNode child = ts_node_named_child(node, i);
+            if (strcmp(_ts_node_type(child), "identifier") == 0) {
+                CioptNode *vnode = ciopt_node_create(CIOPT_NODE_VARIABLE_DECL, lineno);
+                if (vnode) {
+                    vnode->end_lineno = end_lineno;
+                    vnode->data.var_decl.name = _ts_node_text(child, source);
+                    return vnode;
+                }
+            }
+        }
         return NULL;
+    }
+
+    if (strcmp(type, "init_declarator") == 0) {
+        CioptNode *vnode = ciopt_node_create(CIOPT_NODE_VARIABLE_DECL, lineno);
+        if (!vnode) return NULL;
+        vnode->end_lineno = end_lineno;
+
+        TSNode decl = ts_node_child_by_field_name(node, "declarator", 10);
+        if (!ts_node_is_null(decl)) {
+            if (strcmp(_ts_node_type(decl), "identifier") == 0) {
+                vnode->data.var_decl.name = _ts_node_text(decl, source);
+            } else {
+                uint32_t nc = ts_node_named_child_count(decl);
+                for (uint32_t j = 0; j < nc; j++) {
+                    TSNode c = ts_node_named_child(decl, j);
+                    if (strcmp(_ts_node_type(c), "identifier") == 0) {
+                        vnode->data.var_decl.name = _ts_node_text(c, source);
+                        break;
+                    }
+                }
+            }
+        }
+
+        TSNode val = ts_node_child_by_field_name(node, "value", 5);
+        if (!ts_node_is_null(val)) {
+            vnode->data.var_decl.init = _walk_ts_node(val, source);
+        }
+
+        return vnode;
     }
 
     if (strcmp(type, "compound_statement") == 0) {
@@ -250,7 +282,22 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
         if (!for_node) return NULL;
         for_node->end_lineno = end_lineno;
 
-        /* Body */
+        TSNode init = ts_node_child_by_field_name(node, "initializer", 11);
+        if (ts_node_is_null(init)) init = ts_node_child_by_field_name(node, "clause", 6);
+        if (!ts_node_is_null(init)) {
+            for_node->data.for_loop.init = _walk_ts_node(init, source);
+        }
+
+        TSNode cond = ts_node_child_by_field_name(node, "condition", 9);
+        if (!ts_node_is_null(cond)) {
+            for_node->data.for_loop.condition = _walk_ts_node(cond, source);
+        }
+
+        TSNode update = ts_node_child_by_field_name(node, "update", 6);
+        if (!ts_node_is_null(update)) {
+            for_node->data.for_loop.update = _walk_ts_node(update, source);
+        }
+
         TSNode body = ts_node_child_by_field_name(node, "body", 4);
         if (!ts_node_is_null(body)) {
             for_node->data.for_loop.body = _walk_ts_node(body, source);
@@ -264,6 +311,11 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
         if (!while_node) return NULL;
         while_node->end_lineno = end_lineno;
 
+        TSNode cond = ts_node_child_by_field_name(node, "condition", 9);
+        if (!ts_node_is_null(cond)) {
+            while_node->data.loop.condition = _walk_ts_node(cond, source);
+        }
+
         TSNode body = ts_node_child_by_field_name(node, "body", 4);
         if (!ts_node_is_null(body)) {
             while_node->data.loop.body = _walk_ts_node(body, source);
@@ -276,6 +328,11 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
         CioptNode *do_node = ciopt_node_create(CIOPT_NODE_DO_WHILE, lineno);
         if (!do_node) return NULL;
         do_node->end_lineno = end_lineno;
+
+        TSNode cond = ts_node_child_by_field_name(node, "condition", 9);
+        if (!ts_node_is_null(cond)) {
+            do_node->data.loop.condition = _walk_ts_node(cond, source);
+        }
 
         TSNode body = ts_node_child_by_field_name(node, "body", 4);
         if (!ts_node_is_null(body)) {
@@ -415,6 +472,41 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
         return bin;
     }
 
+    if (strcmp(type, "update_expression") == 0) {
+        CioptNode *unary = ciopt_node_create(CIOPT_NODE_UNARY_OP, lineno);
+        if (!unary) return NULL;
+        unary->end_lineno = end_lineno;
+
+        TSNode operand = ts_node_child_by_field_name(node, "argument", 8);
+        if (ts_node_is_null(operand) && ts_node_named_child_count(node) > 0)
+            operand = ts_node_named_child(node, 0);
+
+        if (!ts_node_is_null(operand))
+            unary->data.unary_op.operand = _walk_ts_node(operand, source);
+
+        uint32_t total = ts_node_child_count(node);
+        for (uint32_t i = 0; i < total; i++) {
+            TSNode c = ts_node_child(node, i);
+            const char *ct = _ts_node_type(c);
+            if (strcmp(ct, "++") == 0 || strcmp(ct, "--") == 0) {
+                unary->data.unary_op.op = strdup(ct);
+                break;
+            }
+        }
+        if (!unary->data.unary_op.op) unary->data.unary_op.op = strdup("++");
+        return unary;
+    }
+
+    if (strcmp(type, "parenthesized_expression") == 0) {
+        uint32_t nchild = ts_node_named_child_count(node);
+        for (uint32_t i = 0; i < nchild; i++) {
+            TSNode child = ts_node_named_child(node, i);
+            CioptNode *cnode = _walk_ts_node(child, source);
+            if (cnode) return cnode;
+        }
+        return NULL;
+    }
+
     if (strcmp(type, "assignment_expression") == 0) {
         CioptNode *assign = ciopt_node_create(CIOPT_NODE_ASSIGNMENT, lineno);
         if (!assign) return NULL;
@@ -427,6 +519,11 @@ static CioptNode *_walk_ts_node(TSNode node, const char *source)
         TSNode right = ts_node_child_by_field_name(node, "right", 5);
         if (!ts_node_is_null(right))
             assign->data.assignment.value = _walk_ts_node(right, source);
+
+        TSNode op_node = ts_node_child_by_field_name(node, "operator", 8);
+        if (!ts_node_is_null(op_node)) {
+            assign->data.assignment.op = _ts_node_text(op_node, source);
+        }
 
         return assign;
     }
