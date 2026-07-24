@@ -66,9 +66,9 @@ static void _walk_patterns(CioptNode *node, PatternAnalysis *pa,
         strcmp(node->data.call.name, "strcat") == 0 && loop_depth > 0) {
         pattern_analysis_add(pa, "strcat_in_loop", CATEGORY_STRING_OPERATION,
             PATTERN_CRITICAL, node->lineno, node->end_lineno,
-            "strcat() inside loop — O(n²) string concatenation",
+            "strcat() inside loop - O(n^2) string concatenation",
             "Use a string buffer or snprintf to build strings efficiently.",
-            "O(n²) → O(n)");
+            "O(n^2) -> O(n)");
     }
 
     /* Check for realloc in loops */
@@ -76,9 +76,9 @@ static void _walk_patterns(CioptNode *node, PatternAnalysis *pa,
         strcmp(node->data.call.name, "realloc") == 0 && loop_depth > 0) {
         pattern_analysis_add(pa, "realloc_in_loop", CATEGORY_MEMORY,
             PATTERN_WARNING, node->lineno, node->end_lineno,
-            "realloc() inside loop — may cause O(n²) memory operations",
+            "realloc() inside loop - may cause O(n^2) memory operations",
             "Pre-allocate memory before the loop, or use a growth strategy.",
-            "O(n²) → O(n)");
+            "O(n^2) -> O(n)");
     }
 
     /* Check for strlen in loop condition */
@@ -93,9 +93,9 @@ static void _walk_patterns(CioptNode *node, PatternAnalysis *pa,
                 pattern_analysis_add(pa, "strlen_in_loop_condition",
                     CATEGORY_ALGORITHM, PATTERN_CRITICAL,
                     node->lineno, node->end_lineno,
-                    "strlen() in for-loop condition — O(n²) total",
+                    "strlen() in for-loop condition - O(n^2) total",
                     "Cache strlen result in a variable before the loop.",
-                    "O(n²) → O(n)");
+                    "O(n^2) -> O(n)");
             }
         }
     }
@@ -105,13 +105,16 @@ static void _walk_patterns(CioptNode *node, PatternAnalysis *pa,
         strcmp(node->data.call.name, "gets") == 0) {
         pattern_analysis_add(pa, "unsafe_gets", CATEGORY_SECURITY,
             PATTERN_CRITICAL, node->lineno, node->end_lineno,
-            "Unsafe gets() call — buffer overflow risk",
+            "Unsafe gets() call - buffer overflow risk",
             "Use fgets() with a size limit instead.",
             "Security fix");
     }
 
     /* Recurse */
     switch (node->type) {
+        case CIOPT_NODE_EXPR_STMT:
+            _walk_patterns(node->data.expr_stmt.expr, pa, loop_depth);
+            break;
         case CIOPT_NODE_BLOCK:
             for (size_t i = 0; i < node->data.block.stmts.count; i++)
                 _walk_patterns(node->data.block.stmts.nodes[i], pa, loop_depth);
