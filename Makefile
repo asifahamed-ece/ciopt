@@ -37,6 +37,30 @@ CLI_SRC := $(SRCDIR)/main.c
 CLI_OBJ := $(BUILDDIR)/main.o
 CLI_BIN := ciopt
 
+# OS-specific commands and settings
+ifeq ($(OS),Windows_NT)
+    EXE := .exe
+    RUN_TEST_VECTOR := $(BUILDDIR)\tests\test_vector$(EXE)
+    RUN_TEST_ANALYZER := $(BUILDDIR)\tests\test_analyzer$(EXE)
+    CLEAN_CMD = \
+        if exist "$(BUILDDIR)" rmdir /s /q "$(BUILDDIR)" && \
+        if exist "$(CLI_BIN)$(EXE)" del "$(CLI_BIN)$(EXE)" && \
+        if exist "report.html" del "report.html"
+    DIRS_CMD = \
+        if not exist "$(BUILDDIR)\ciopt\utils" mkdir "$(BUILDDIR)\ciopt\utils" && \
+        if not exist "$(BUILDDIR)\ciopt\analyzer" mkdir "$(BUILDDIR)\ciopt\analyzer" && \
+        if not exist "$(BUILDDIR)\ciopt\reporting" mkdir "$(BUILDDIR)\ciopt\reporting" && \
+        if not exist "$(BUILDDIR)\ciopt\parser" mkdir "$(BUILDDIR)\ciopt\parser" && \
+        if not exist "$(BUILDDIR)\vendor" mkdir "$(BUILDDIR)\vendor" && \
+        if not exist "$(BUILDDIR)\tests" mkdir "$(BUILDDIR)\tests"
+else
+    EXE :=
+    RUN_TEST_VECTOR := ./$(BUILDDIR)/tests/test_vector
+    RUN_TEST_ANALYZER := ./$(BUILDDIR)/tests/test_analyzer
+    CLEAN_CMD = rm -rf $(BUILDDIR) $(CLI_BIN) report.html
+    DIRS_CMD = mkdir -p $(BUILDDIR)/ciopt/utils $(BUILDDIR)/ciopt/analyzer $(BUILDDIR)/ciopt/reporting $(BUILDDIR)/ciopt/parser $(BUILDDIR)/vendor $(BUILDDIR)/tests
+endif
+
 # Compiler flags
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic
 CFLAGS += -I$(SRCDIR) $(TS_INCLUDE)
@@ -55,31 +79,26 @@ CFLAGS += $(RELEASE_CFLAGS)
 
 .PHONY: all debug test clean help
 
-all: dirs $(CLI_BIN)
+all: dirs $(CLI_BIN)$(EXE)
 
 # Debug build
 debug: CFLAGS := $(filter-out $(RELEASE_CFLAGS),$(CFLAGS)) $(DEBUG_CFLAGS)
-debug: dirs $(CLI_BIN)
+debug: dirs $(CLI_BIN)$(EXE)
 
 # Test build & execute
-test: dirs $(BUILDDIR)/tests/test_vector.exe $(BUILDDIR)/tests/test_analyzer.exe
-	$(BUILDDIR)\tests\test_vector.exe
-	$(BUILDDIR)\tests\test_analyzer.exe
+test: dirs $(BUILDDIR)/tests/test_vector$(EXE) $(BUILDDIR)/tests/test_analyzer$(EXE)
+	$(RUN_TEST_VECTOR)
+	$(RUN_TEST_ANALYZER)
 
-$(BUILDDIR)/tests/test_vector.exe: tests/test_vector.c $(BUILDDIR)/ciopt/utils/vector.o
+$(BUILDDIR)/tests/test_vector$(EXE): tests/test_vector.c $(BUILDDIR)/ciopt/utils/vector.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(BUILDDIR)/tests/test_analyzer.exe: tests/test_analyzer.c $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ)
+$(BUILDDIR)/tests/test_analyzer$(EXE): tests/test_analyzer.c $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
-# Create build directories (cmd.exe compatible - works with MinGW make)
+# Create build directories
 dirs:
-	if not exist "$(BUILDDIR)\ciopt\utils" mkdir "$(BUILDDIR)\ciopt\utils"
-	if not exist "$(BUILDDIR)\ciopt\analyzer" mkdir "$(BUILDDIR)\ciopt\analyzer"
-	if not exist "$(BUILDDIR)\ciopt\reporting" mkdir "$(BUILDDIR)\ciopt\reporting"
-	if not exist "$(BUILDDIR)\ciopt\parser" mkdir "$(BUILDDIR)\ciopt\parser"
-	if not exist "$(BUILDDIR)\vendor" mkdir "$(BUILDDIR)\vendor"
-	if not exist "$(BUILDDIR)\tests" mkdir "$(BUILDDIR)\tests"
+	$(DIRS_CMD)
 
 # Build rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
@@ -96,13 +115,11 @@ $(TS_C_OBJ): $(TS_C_SRC)
 $(CLI_OBJ): $(CLI_SRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(CLI_BIN): $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ) $(CLI_OBJ)
+$(CLI_BIN)$(EXE): $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ) $(CLI_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	if exist "$(BUILDDIR)" rmdir /s /q "$(BUILDDIR)"
-	if exist "$(CLI_BIN).exe" del "$(CLI_BIN).exe"
-	if exist "report.html" del "report.html"
+	$(CLEAN_CMD)
 
 help:
 	@echo CiOpt - C Code Complexity Analysis Engine
