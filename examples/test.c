@@ -1,4 +1,4 @@
-/* test_nlogn.c - Test for O(n log n) detection */
+/* test.c - Test for O(n log n) detection */
 #include <stdio.h>
 
 void executeNLogN(int n) {
@@ -13,7 +13,6 @@ void executeNLogN(int n) {
         }
     }
 
-    printf("For n = %d, total operations executed = %d\n", n, operationCount);
 }
 
 int main() {
@@ -22,6 +21,6 @@ int main() {
 
     n = 16;
     executeNLogN(n);
-
+    printf("For n = %d\n", n);
     return 0;
 }
