@@ -190,6 +190,25 @@ static void _analyze_body_calls(CioptNode *node, ComplexityResult *result,
     }
 }
 
+static ComplexityClass _calculate_single_loop_complexity(LoopDetail *loop)
+{
+    if (!loop) return COMPLEXITY_O_1;
+
+    ComplexityClass self_c = estimate_loop_iterations(loop);
+
+    if (loop->children_count == 0) return self_c;
+
+    ComplexityClass max_child_c = COMPLEXITY_O_1;
+    for (size_t i = 0; i < loop->children_count; i++) {
+        ComplexityClass child_c = _calculate_single_loop_complexity(loop->children[i]);
+        if (complexity_class_rank(child_c) > complexity_class_rank(max_child_c)) {
+            max_child_c = child_c;
+        }
+    }
+
+    return combine_complexities(self_c, max_child_c, "multiply");
+}
+
 /* Estimate complexity contribution from loops */
 static ComplexityClass _estimate_loop_complexity(LoopAnalysis *loop_analysis,
                                                    ComplexityResult *result)
@@ -197,69 +216,19 @@ static ComplexityClass _estimate_loop_complexity(LoopAnalysis *loop_analysis,
     if (!loop_analysis || loop_analysis->total_loops == 0)
         return COMPLEXITY_O_1;
 
-    /* Find top-level loops (depth == 1) and compute max */
     ComplexityClass max_complexity = COMPLEXITY_O_1;
 
     for (size_t i = 0; i < loop_analysis->loops_count; i++) {
         LoopDetail *loop = loop_analysis->loops[i];
-        if (loop->depth != 1) continue;
+        if (loop->depth != 1 && loop->parent != NULL) continue;
 
-        /* Estimate this loop's complexity */
-        ComplexityClass loop_c = estimate_loop_iterations(loop);
-
-        /* Check for expensive calls inside this loop */
-        /* (Simplified: we just use the loop estimate) */
-
-        /* For nested loops, multiply all sibling loops at each level */
-        ComplexityClass total_c = COMPLEXITY_O_1;
-        
-        /* Process all loops at the current nesting level */
-        for (size_t c = 0; c < loop->children_count; c++) {
-            ComplexityClass child_c = estimate_loop_iterations(loop->children[c]);
-            total_c = combine_complexities(total_c, child_c, "multiply");
-        }
-        
-        /* Now check deeper nesting - find max depth path */
-        LoopDetail *deepest = NULL;
-        int max_depth = 0;
-        for (size_t c = 0; c < loop->children_count; c++) {
-            int d = loop->children[c]->depth;
-            if (d > max_depth) {
-                max_depth = d;
-                deepest = loop->children[c];
-            }
-        }
-        
-        /* Traverse down the deepest path, multiplying siblings at each level */
-        while (deepest && deepest->children_count > 0) {
-            ComplexityClass level_max = COMPLEXITY_O_1;
-            
-            /* Find all siblings at this depth and get their combined complexity */
-            for (size_t c = 0; c < deepest->children_count; c++) {
-                ComplexityClass child_c = estimate_loop_iterations(deepest->children[c]);
-                if (complexity_class_rank(child_c) > complexity_class_rank(level_max))
-                    level_max = child_c;
-            }
-            
-            if (complexity_class_rank(level_max) > complexity_class_rank(COMPLEXITY_O_1))
-                total_c = combine_complexities(total_c, level_max, "multiply");
-            
-            /* Go to first child with children */
-            LoopDetail *next = NULL;
-            for (size_t c = 0; c < deepest->children_count; c++) {
-                if (deepest->children[c]->children_count > 0) {
-                    next = deepest->children[c];
-                    break;
-                }
-            }
-            deepest = next;
-        }
+        ComplexityClass total_c = _calculate_single_loop_complexity(loop);
 
         char desc[256];
-        snprintf(desc, sizeof(desc), "%s loop at line %d — %s iterations",
+        snprintf(desc, sizeof(desc), "%s loop at line %d -> %s iterations",
                  loop->kind == LOOP_FOR ? "For" :
                  loop->kind == LOOP_WHILE ? "While" : "Do-while",
-                 loop->lineno, complexity_class_to_string(loop_c));
+                 loop->lineno, complexity_class_to_string(total_c));
         _add_explanation(result, "loop", total_c, loop->lineno, desc, "");
 
         if (complexity_class_rank(total_c) > complexity_class_rank(max_complexity))
