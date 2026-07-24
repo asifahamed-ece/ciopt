@@ -74,6 +74,15 @@ static void _free_string_fields(CioptNode *node)
         case CIOPT_NODE_MEMBER_ACCESS:
             free(node->data.member_access.member);
             break;
+        case CIOPT_NODE_BINARY_OP:
+            free((char *)node->data.binary_op.op);
+            break;
+        case CIOPT_NODE_ASSIGNMENT:
+            free((char *)node->data.assignment.op);
+            break;
+        case CIOPT_NODE_UNARY_OP:
+            free((char *)node->data.unary_op.op);
+            break;
         default:
             break;
     }
