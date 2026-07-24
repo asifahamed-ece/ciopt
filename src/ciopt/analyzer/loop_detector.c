@@ -56,6 +56,7 @@ void loop_detail_free(LoopDetail *loop)
     for (size_t i = 0; i < loop->variables_count; i++) {
         free(loop->variables[i].name);
         free(loop->variables[i].variable_bound);
+        free(loop->variables[i].iterable);
     }
     free(loop->variables);
     free(loop->invariant_lines);
@@ -79,10 +80,181 @@ void loop_analysis_free(LoopAnalysis *analysis)
 {
     if (!analysis) return;
     free(analysis->function_name);
-    for (size_t i = 0; i < analysis->loops_count; i++)
-        loop_detail_free(analysis->loops[i]);
+    /* Only free top-level loops directly; loop_detail_free handles children recursively */
+    for (size_t i = 0; i < analysis->loops_count; i++) {
+        if (analysis->loops[i]->depth == 1 || analysis->loops[i]->parent == NULL)
+            loop_detail_free(analysis->loops[i]);
+    }
     free(analysis->loops);
     free(analysis);
+}
+
+static bool _has_halving_expr(CioptNode *node)
+{
+    if (!node) return false;
+
+    if (node->type == CIOPT_NODE_ASSIGNMENT) {
+        if (node->data.assignment.op) {
+            if (strcmp(node->data.assignment.op, "/=") == 0 ||
+                strcmp(node->data.assignment.op, ">>=") == 0)
+                return true;
+        }
+        if (node->data.assignment.value &&
+            node->data.assignment.value->type == CIOPT_NODE_BINARY_OP) {
+            CioptNode *bin = node->data.assignment.value;
+            if (bin->data.binary_op.op &&
+                (strcmp(bin->data.binary_op.op, "/") == 0 ||
+                 strcmp(bin->data.binary_op.op, ">>") == 0))
+                return true;
+        }
+    }
+
+    if (node->type == CIOPT_NODE_BLOCK) {
+        for (size_t i = 0; i < node->data.block.stmts.count; i++) {
+            if (_has_halving_expr(node->data.block.stmts.nodes[i])) return true;
+        }
+    } else if (node->type == CIOPT_NODE_EXPR_STMT) {
+        return _has_halving_expr(node->data.expr_stmt.expr);
+    } else if (node->type == CIOPT_NODE_IF) {
+        if (_has_halving_expr(node->data.if_stmt.then_body)) return true;
+        if (_has_halving_expr(node->data.if_stmt.else_body)) return true;
+    }
+
+    return false;
+}
+
+static bool _has_doubling_expr(CioptNode *node)
+{
+    if (!node) return false;
+
+    if (node->type == CIOPT_NODE_ASSIGNMENT) {
+        if (node->data.assignment.op) {
+            if (strcmp(node->data.assignment.op, "*=") == 0 ||
+                strcmp(node->data.assignment.op, "<<=") == 0)
+                return true;
+        }
+        if (node->data.assignment.value &&
+            node->data.assignment.value->type == CIOPT_NODE_BINARY_OP) {
+            CioptNode *bin = node->data.assignment.value;
+            if (bin->data.binary_op.op &&
+                (strcmp(bin->data.binary_op.op, "*") == 0 ||
+                 strcmp(bin->data.binary_op.op, "<<") == 0))
+                return true;
+        }
+    }
+
+    if (node->type == CIOPT_NODE_BLOCK) {
+        for (size_t i = 0; i < node->data.block.stmts.count; i++) {
+            if (_has_doubling_expr(node->data.block.stmts.nodes[i])) return true;
+        }
+    } else if (node->type == CIOPT_NODE_EXPR_STMT) {
+        return _has_doubling_expr(node->data.expr_stmt.expr);
+    } else if (node->type == CIOPT_NODE_IF) {
+        if (_has_doubling_expr(node->data.if_stmt.then_body)) return true;
+        if (_has_doubling_expr(node->data.if_stmt.else_body)) return true;
+    }
+
+    return false;
+}
+
+bool check_halving_pattern(CioptNode *node)
+{
+    if (!node) return false;
+
+    CioptNode *body = NULL;
+    if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) body = node->data.loop.body;
+    else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
+    
+    return _has_halving_expr(body);
+}
+
+bool check_doubling_pattern(CioptNode *node)
+{
+    if (!node) return false;
+
+    CioptNode *body = NULL;
+    if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) body = node->data.loop.body;
+    else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
+
+    return _has_doubling_expr(body);
+}
+
+static void _analyze_loop_variables(LoopDetail *loop, CioptNode *node)
+{
+    if (!loop || !node) return;
+
+    if (node->type == CIOPT_NODE_FOR) {
+        CioptNode *init = node->data.for_loop.init;
+        CioptNode *cond = node->data.for_loop.condition;
+        CioptNode *upd = node->data.for_loop.update;
+
+        const char *var_name = NULL;
+        if (init) {
+            if (init->type == CIOPT_NODE_VARIABLE_DECL && init->data.var_decl.name) {
+                var_name = init->data.var_decl.name;
+            } else if (init->type == CIOPT_NODE_ASSIGNMENT && init->data.assignment.target &&
+                       init->data.assignment.target->type == CIOPT_NODE_IDENTIFIER) {
+                var_name = init->data.assignment.target->data.identifier.name;
+            } else if (init->type == CIOPT_NODE_EXPR_STMT && init->data.expr_stmt.expr) {
+                CioptNode *e = init->data.expr_stmt.expr;
+                if (e->type == CIOPT_NODE_ASSIGNMENT && e->data.assignment.target &&
+                    e->data.assignment.target->type == CIOPT_NODE_IDENTIFIER) {
+                    var_name = e->data.assignment.target->data.identifier.name;
+                }
+            }
+        }
+
+        if (var_name) {
+            loop_detail_add_variable(loop, var_name, node->lineno);
+        } else {
+            loop_detail_add_variable(loop, "i", node->lineno);
+        }
+
+        LoopVariable *v = &loop->variables[0];
+
+        if (cond && cond->type == CIOPT_NODE_BINARY_OP) {
+            CioptNode *right = cond->data.binary_op.right;
+            if (right) {
+                if (right->type == CIOPT_NODE_INT_LITERAL) {
+                    v->has_constant_bound = true;
+                    v->constant_bound = right->data.int_literal.value;
+                } else if (right->type == CIOPT_NODE_IDENTIFIER) {
+                    v->has_variable_bound = true;
+                    v->variable_bound = strdup(right->data.identifier.name);
+                } else {
+                    v->has_variable_bound = true;
+                }
+            }
+        } else {
+            v->has_variable_bound = true;
+        }
+
+        if (upd) {
+            if (upd->type == CIOPT_NODE_ASSIGNMENT && upd->data.assignment.op) {
+                if (strcmp(upd->data.assignment.op, "*=") == 0 || strcmp(upd->data.assignment.op, "<<=") == 0)
+                    v->is_doubling = true;
+                if (strcmp(upd->data.assignment.op, "/=") == 0 || strcmp(upd->data.assignment.op, ">>=") == 0)
+                    v->is_halving = true;
+            }
+        }
+        if (check_halving_pattern(node)) v->is_halving = true;
+        if (check_doubling_pattern(node)) v->is_doubling = true;
+
+    } else if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) {
+        CioptNode *cond = node->data.loop.condition;
+        const char *var_name = "n";
+        if (cond && cond->type == CIOPT_NODE_BINARY_OP) {
+            if (cond->data.binary_op.left && cond->data.binary_op.left->type == CIOPT_NODE_IDENTIFIER) {
+                var_name = cond->data.binary_op.left->data.identifier.name;
+            }
+        }
+        loop_detail_add_variable(loop, var_name, node->lineno);
+        LoopVariable *v = &loop->variables[0];
+        v->has_variable_bound = true;
+
+        if (check_halving_pattern(node)) v->is_halving = true;
+        if (check_doubling_pattern(node)) v->is_doubling = true;
+    }
 }
 
 /* Internal visitor walker for loop detection */
@@ -104,6 +276,8 @@ static void _walk_node(CioptNode *node, LoopDetail **current_stack,
         /* Set depth */
         loop->depth = (int)stack_depth + 1;
 
+        _analyze_loop_variables(loop, node);
+
         /* Add to analysis flat list */
         if (analysis->loops_count >= analysis->loops_capacity) {
             size_t new_cap = analysis->loops_capacity ? analysis->loops_capacity * 2 : 16;
@@ -124,16 +298,12 @@ static void _walk_node(CioptNode *node, LoopDetail **current_stack,
             loop_detail_add_child(parent, loop);
         }
 
-        /* Push onto stack and recurse */
+        /* Push onto stack and recurse into body */
         current_stack[stack_depth] = loop;
         if (node->type == CIOPT_NODE_FOR) {
             _walk_node(node->data.for_loop.body, current_stack, stack_depth + 1, analysis);
-            _walk_node(node->data.for_loop.init, current_stack, stack_depth + 1, analysis);
-            _walk_node(node->data.for_loop.condition, current_stack, stack_depth + 1, analysis);
-            _walk_node(node->data.for_loop.update, current_stack, stack_depth + 1, analysis);
         } else {
             _walk_node(node->data.loop.body, current_stack, stack_depth + 1, analysis);
-            _walk_node(node->data.loop.condition, current_stack, stack_depth + 1, analysis);
         }
     } else {
         /* Recurse into children */
@@ -164,7 +334,6 @@ LoopAnalysis *detect_loops(CioptNode *func_node)
     );
     if (!analysis) return NULL;
 
-    /* Allocate stack for recursion tracking (max 64 depth) */
     LoopDetail *stack[64];
     _walk_node(func_node, stack, 0, analysis);
 
@@ -175,75 +344,15 @@ ComplexityClass estimate_loop_iterations(LoopDetail *loop)
 {
     if (!loop) return COMPLEXITY_O_N;
 
-    if (loop->kind == LOOP_WHILE || loop->kind == LOOP_DO_WHILE) {
-        if (loop->variables_count > 0) {
-            LoopVariable *v = &loop->variables[0];
-            if (v->is_halving) return COMPLEXITY_O_LOG_N;
-            if (v->is_doubling) return COMPLEXITY_O_LOG_N;
-        }
-        return COMPLEXITY_O_N;
-    }
-
-    /* For loop */
     if (loop->variables_count > 0) {
         LoopVariable *v = &loop->variables[0];
+        if (v->is_halving || v->is_doubling) return COMPLEXITY_O_LOG_N;
         if (v->has_constant_bound) return COMPLEXITY_O_1;
-        if (v->is_halving) return COMPLEXITY_O_LOG_N;
-        if (v->is_doubling) return COMPLEXITY_O_LOG_N;
-        /* Default: O(n) for variable bound */
-        return COMPLEXITY_O_N;
+        if (v->has_variable_bound) return COMPLEXITY_O_N;
     }
+
+    if (check_halving_pattern(loop->node) || check_doubling_pattern(loop->node))
+        return COMPLEXITY_O_LOG_N;
 
     return COMPLEXITY_O_N;
-}
-
-bool check_halving_pattern(CioptNode *node)
-{
-    if (!node) return false;
-
-    /* Check for patterns like: n /= 2 or n = n / 2 inside the loop body */
-    CioptNode *body = NULL;
-    if (node->type == CIOPT_NODE_WHILE) body = node->data.loop.body;
-    else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
-    if (!body) return false;
-
-    /* Walk body for halving assignments */
-    /* This is a simplified check - looks for n = n / 2 or n /= 2 in the body */
-    for (size_t i = 0; i < body->data.block.stmts.count; i++) {
-        CioptNode *stmt = body->data.block.stmts.nodes[i];
-        if (stmt->type == CIOPT_NODE_EXPR_STMT && stmt->data.expr_stmt.expr) {
-            CioptNode *expr = stmt->data.expr_stmt.expr;
-            if (expr->type == CIOPT_NODE_ASSIGNMENT) {
-                if (expr->data.assignment.op &&
-                    strcmp(expr->data.assignment.op, "/=") == 0) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-bool check_doubling_pattern(CioptNode *node)
-{
-    if (!node) return false;
-
-    CioptNode *body = NULL;
-    if (node->type == CIOPT_NODE_WHILE) body = node->data.loop.body;
-    else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
-    if (!body) return false;
-
-    for (size_t i = 0; i < body->data.block.stmts.count; i++) {
-        CioptNode *stmt = body->data.block.stmts.nodes[i];
-        if (stmt->type == CIOPT_NODE_EXPR_STMT && stmt->data.expr_stmt.expr) {
-            CioptNode *expr = stmt->data.expr_stmt.expr;
-            if (expr->type == CIOPT_NODE_ASSIGNMENT) {
-                if (expr->data.assignment.op &&
-                    strcmp(expr->data.assignment.op, "*=") == 0) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
 }
