@@ -171,6 +171,16 @@ int* deduplicate(int* items, int n, int* result_size) {
 
 ---
 
+## 📊 Sample HTML Report
+
+CiOpt generates clean HTML reports with a summary dashboard, per‑function complexity, and actionable issue suggestions:
+
+<p align="center">
+  <img src="src/CiOpt_HTML_Report.png" alt="CiOpt Report Preview" width="75%" />
+</p>
+
+---
+
 ## Features
 
 | Feature | Description |
