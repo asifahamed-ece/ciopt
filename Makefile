@@ -53,13 +53,24 @@ DEBUG_CFLAGS := -O0 -g3 -DCIOPT_DEBUG
 # Default build: release
 CFLAGS += $(RELEASE_CFLAGS)
 
-.PHONY: all debug clean help
+.PHONY: all debug test clean help
 
 all: dirs $(CLI_BIN)
 
 # Debug build
 debug: CFLAGS := $(filter-out $(RELEASE_CFLAGS),$(CFLAGS)) $(DEBUG_CFLAGS)
 debug: dirs $(CLI_BIN)
+
+# Test build & execute
+test: dirs $(BUILDDIR)/tests/test_vector.exe $(BUILDDIR)/tests/test_analyzer.exe
+	$(BUILDDIR)\tests\test_vector.exe
+	$(BUILDDIR)\tests\test_analyzer.exe
+
+$(BUILDDIR)/tests/test_vector.exe: tests/test_vector.c $(BUILDDIR)/ciopt/utils/vector.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILDDIR)/tests/test_analyzer.exe: tests/test_analyzer.c $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@
 
 # Create build directories (cmd.exe compatible - works with MinGW make)
 dirs:
@@ -91,6 +102,7 @@ $(CLI_BIN): $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ) $(CLI_OBJ)
 clean:
 	if exist "$(BUILDDIR)" rmdir /s /q "$(BUILDDIR)"
 	if exist "$(CLI_BIN).exe" del "$(CLI_BIN).exe"
+	if exist "report.html" del "report.html"
 
 help:
 	@echo CiOpt - C Code Complexity Analysis Engine
@@ -98,5 +110,6 @@ help:
 	@echo Targets:
 	@echo   make         - Build release binary
 	@echo   make debug   - Build with debug symbols
+	@echo   make test    - Build and run unit/integration tests
 	@echo   make clean   - Remove build artifacts
 	@echo   make help    - Show this help

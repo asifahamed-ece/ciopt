@@ -3,6 +3,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "ciopt/api.h"
 #include "ciopt/config.h"
 #include "ciopt/reporting/terminal_reporter.h"
@@ -35,6 +39,9 @@ static void print_version(void)
 
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+    SetConsoleOutputCP(65001);
+#endif
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
