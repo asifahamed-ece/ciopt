@@ -89,6 +89,141 @@ void loop_analysis_free(LoopAnalysis *analysis)
     free(analysis);
 }
 
+static bool _is_binary_search_update(CioptNode *node)
+{
+    /* Check for patterns like: low = mid + 1, high = mid - 1, low = mid, high = mid */
+    if (!node || node->type != CIOPT_NODE_ASSIGNMENT) return false;
+    
+    CioptNode *target = node->data.assignment.target;
+    CioptNode *value = node->data.assignment.value;
+    
+    if (!target || !value) return false;
+    
+    /* Target should be an identifier (like low, high, left, right) */
+    if (target->type != CIOPT_NODE_IDENTIFIER) return false;
+    
+    const char *target_name = target->data.identifier.name;
+    if (!target_name) return false;
+    
+    /* Check if target name suggests a bound variable */
+    bool is_bound_var = (strstr(target_name, "low") != NULL ||
+                         strstr(target_name, "high") != NULL ||
+                         strstr(target_name, "left") != NULL ||
+                         strstr(target_name, "right") != NULL ||
+                         strstr(target_name, "start") != NULL ||
+                         strstr(target_name, "end") != NULL);
+    
+    if (!is_bound_var) return false;
+    
+    /* Check if value is based on 'mid' identifier */
+    if (value->type == CIOPT_NODE_IDENTIFIER) {
+        if (value->data.identifier.name && 
+            strcmp(value->data.identifier.name, "mid") == 0) {
+            return true;
+        }
+    }
+    
+    /* Check for mid + 1, mid - 1 patterns */
+    if (value->type == CIOPT_NODE_BINARY_OP) {
+        CioptNode *left = value->data.binary_op.left;
+        CioptNode *right = value->data.binary_op.right;
+        
+        if (left && left->type == CIOPT_NODE_IDENTIFIER &&
+            left->data.identifier.name &&
+            strcmp(left->data.identifier.name, "mid") == 0) {
+            if (right && right->type == CIOPT_NODE_INT_LITERAL) {
+                return true; /* mid +/- constant */
+            }
+        }
+        
+        if (right && right->type == CIOPT_NODE_IDENTIFIER &&
+            right->data.identifier.name &&
+            strcmp(right->data.identifier.name, "mid") == 0) {
+            if (left && left->type == CIOPT_NODE_INT_LITERAL) {
+                return true; /* constant +/- mid */
+            }
+        }
+    }
+    
+    return false;
+}
+
+static bool _has_binary_search_pattern(CioptNode *node)
+{
+    if (!node) return false;
+    
+    /* Look for mid = (low + high) / 2 pattern */
+    bool has_mid_calc = false;
+    bool has_bound_update = false;
+    
+    if (node->type == CIOPT_NODE_ASSIGNMENT) {
+        CioptNode *target = node->data.assignment.target;
+        CioptNode *value = node->data.assignment.value;
+        
+        /* Check for mid = (low + high) / 2 or mid = (low + high) >> 1 */
+        if (target && target->type == CIOPT_NODE_IDENTIFIER &&
+            target->data.identifier.name &&
+            strcmp(target->data.identifier.name, "mid") == 0) {
+            
+            if (value && value->type == CIOPT_NODE_BINARY_OP) {
+                const char *op = value->data.binary_op.op;
+                if (op && (strcmp(op, "/") == 0 || strcmp(op, ">>") == 0)) {
+                    has_mid_calc = true;
+                }
+            }
+        }
+        
+        /* Check for bound updates like low = mid + 1 or high = mid - 1 */
+        if (_is_binary_search_update(node)) {
+            has_bound_update = true;
+        }
+    }
+    
+    if (node->type == CIOPT_NODE_BLOCK) {
+        for (size_t i = 0; i < node->data.block.stmts.count; i++) {
+            if (_has_binary_search_pattern(node->data.block.stmts.nodes[i])) {
+                return true;
+            }
+        }
+    } else if (node->type == CIOPT_NODE_EXPR_STMT) {
+        return _has_binary_search_pattern(node->data.expr_stmt.expr);
+    } else if (node->type == CIOPT_NODE_IF) {
+        if (_has_binary_search_pattern(node->data.if_stmt.then_body)) return true;
+        if (_has_binary_search_pattern(node->data.if_stmt.else_body)) return true;
+        
+        /* Also check the condition for comparisons with arr[mid] */
+        if (node->data.if_stmt.condition) {
+            CioptNode *cond = node->data.if_stmt.condition;
+            if (cond->type == CIOPT_NODE_BINARY_OP) {
+                /* Check if condition involves array access with mid (subscript expression) */
+                CioptNode *left = cond->data.binary_op.left;
+                CioptNode *right = cond->data.binary_op.right;
+                
+                /* Look for arr[mid] pattern using SUBSCRIPT node type */
+                if (left && left->type == CIOPT_NODE_SUBSCRIPT &&
+                    left->data.subscript.index &&
+                    left->data.subscript.index->type == CIOPT_NODE_IDENTIFIER &&
+                    left->data.subscript.index->data.identifier.name &&
+                    strcmp(left->data.subscript.index->data.identifier.name, "mid") == 0) {
+                    has_mid_calc = true;
+                }
+                if (right && right->type == CIOPT_NODE_SUBSCRIPT &&
+                    right->data.subscript.index &&
+                    right->data.subscript.index->type == CIOPT_NODE_IDENTIFIER &&
+                    right->data.subscript.index->data.identifier.name &&
+                    strcmp(right->data.subscript.index->data.identifier.name, "mid") == 0) {
+                    has_mid_calc = true;
+                }
+            }
+        }
+        
+        /* If we have both mid calculation context and bound updates, it's binary search */
+        if (has_mid_calc && has_bound_update) return true;
+    }
+    
+    return has_mid_calc || has_bound_update;
+}
+
 static bool _has_halving_expr(CioptNode *node)
 {
     if (!node) return false;
@@ -165,7 +300,13 @@ bool check_halving_pattern(CioptNode *node)
     if (node->type == CIOPT_NODE_WHILE || node->type == CIOPT_NODE_DO_WHILE) body = node->data.loop.body;
     else if (node->type == CIOPT_NODE_FOR) body = node->data.for_loop.body;
     
-    return _has_halving_expr(body);
+    /* First check for direct halving pattern (n /= 2) */
+    if (_has_halving_expr(body)) return true;
+    
+    /* Then check for binary search pattern (mid calculation + bound updates) */
+    if (_has_binary_search_pattern(body)) return true;
+    
+    return false;
 }
 
 bool check_doubling_pattern(CioptNode *node)
