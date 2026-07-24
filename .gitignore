@@ -1,27 +1,29 @@
 ```
+# Executables
+ciopt
+
 # Compiled and build artifacts
 *.o
 *.obj
 *.out
-*.a
-*.so
-*.dll
 *.exe
+*.dll
+*.so
+*.a
 
 # Dependencies
-venv/
 .venv/
+venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.class
+node_modules/
+dist/
+build/
+target/
 
 # Logs and temp files
 *.log
 *.tmp
 *.swp
-*.swo
 
 # Environment
 .env
@@ -32,19 +34,8 @@ __pycache__/
 .vscode/
 .idea/
 
-# Build directories
-build/
-dist/
-target/
-*.so
-*.dylib
-*.dll
+# System files
+.DS_Store
+Thumbs.db
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# MyPy
-.mypy_cache/
 ```
