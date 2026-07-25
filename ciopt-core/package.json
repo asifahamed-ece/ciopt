@@ -1,0 +1,63 @@
+{
+  "name": "ciopt-core",
+  "displayName": "CiOpt-Core",
+  "description": "Universal C Code Complexity Analyzer using Tree-sitter",
+  "version": "0.0.1",
+  "publisher": "asifahamed-ece",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:c",
+    "onLanguage:cpp"
+  ],
+  "main": "./out/extension.js",
+  "icon": "images/CiOpt_Logo1.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asifahamed-ece/ciopt.git"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "ciopt-core.analyze",
+        "title": "CiOpt-Core: Analyze This File"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ciopt-core.analyze",
+          "group": "navigation",
+          "when": "resourceLangId == c || resourceLangId == cpp"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.125.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "24.x",
+    "typescript-eslint": "^8.61.1",
+    "eslint": "^10.5.0",
+    "typescript": "^6.0.3",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  }
+}

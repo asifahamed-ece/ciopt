@@ -1,0 +1,16 @@
+# --- Main Project Ignores ---
+build/
+*.o
+*.a
+*.so
+ciopt
+
+# --- VS Code Extension Ignores ---
+ciopt-core/node_modules/
+ciopt-core/out/
+ciopt-core/engine/src/
+ciopt-core/engine/vendor/
+ciopt-core/engine/build/
+.vscode/
+.DS_Store
+Thumbs.db
