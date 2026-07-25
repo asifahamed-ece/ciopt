@@ -80,6 +80,8 @@ CFLAGS += $(RELEASE_CFLAGS)
 .PHONY: all debug test clean help
 
 all: dirs $(CLI_BIN)$(EXE)
+	@echo ""
+	@echo "Build successful! Run 'make help' for a quick start guide."
 
 # Debug build
 debug: CFLAGS := $(filter-out $(RELEASE_CFLAGS),$(CFLAGS)) $(DEBUG_CFLAGS)
@@ -122,11 +124,19 @@ clean:
 	$(CLEAN_CMD)
 
 help:
-	@echo CiOpt - C Code Complexity Analysis Engine
-	@echo.
-	@echo Targets:
-	@echo   make         - Build release binary
-	@echo   make debug   - Build with debug symbols
-	@echo   make test    - Build and run unit/integration tests
-	@echo   make clean   - Remove build artifacts
-	@echo   make help    - Show this help
+	@echo "========================================="
+	@echo "  Welcome to CiOpt - C Complexity Analyzer"
+	@echo "========================================="
+	@echo ""
+	@echo "Usage:"
+	@echo "  ./$(CLI_BIN)$(EXE) analyze <file_or_directory> [options]"
+	@echo "  ./$(CLI_BIN)$(EXE) --help                      Show all CLI options"
+	@echo ""
+	@echo "Examples:"
+	@echo "  ./$(CLI_BIN)$(EXE) analyze examples/Stress_again.c -v"
+	@echo "  ./$(CLI_BIN)$(EXE) analyze src/ --verbose"
+	@echo ""
+	@echo "Make Targets:"
+	@echo "  make clean   Remove build artifacts"
+	@echo "  make debug   Build with debug symbols"
+	@echo "  make test    Run unit tests"
