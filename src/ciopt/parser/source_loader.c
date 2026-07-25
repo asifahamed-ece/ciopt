@@ -210,9 +210,7 @@ SourceFile **source_scan_directory(const char *dir_path,
 
 SourceFile **source_scan_directory(const char *dir_path,
                                     const char *const *extensions,
-                                    size_t ext_count,
-                                    const char *const *exclude_dirs,
-                                    size_t exclude_count)
+                                    size_t ext_count)
 {
     if (!dir_path) return NULL;
 
