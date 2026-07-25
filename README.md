@@ -55,6 +55,15 @@ CiOpt analyzes the AI-generated code and produces a **structured report** that y
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
+## Quick Start
+
+```bash
+git clone https://github.com/asifahamed-ece/ciopt.git
+cd ciopt
+make
+./ciopt analyze examples/test_verification.c -v
+```
+---
 
 ### How to Use It in Your Vibe Coding Workflow
 
