@@ -1,11 +1,15 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/Low%20Level-Coder%20❤️-1A1A2E?logo=c&logoColor=white" alt="Low Level Coder" />
-  <img src="https://img.shields.io/badge/C-11-00599C?logo=c" alt="C11" />
+  <img src="https://img.shields.io/badge/11-00599C?logo=c" alt="C11" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT" />
   <img src="https://img.shields.io/badge/parser-Tree--sitter-blueviolet?logo=github" alt="Tree-sitter" />
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D6" alt="Platform" />
-  <!-- <img src="https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visualstudiocode" alt="VS Code Extension" /> -->
+  <img src="https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visualstudiocode" alt="VS Code Extension" />
+</p>
+
+<p align="center">
+  <img src="src/CiOpt_Logo1.png" alt="CiOpt VSCode Extension Logo" width="120" />
 </p>
 
 # CiOpt — AI-Powered C Code Complexity & Optimization Engine
@@ -38,7 +42,7 @@ CiOpt analyzes the AI-generated code and produces a **structured report** that y
 ┌─────────────────────────────────────────────────────────┐
 │                   VIBE CODING LOOP                      │
 │                                                         │
-│   You ──prompt──▶ AI writes C code                     │
+│   You ──prompt──▶ AI writes C code                      │
 │                      │                                  │
 │                      ▼                                  │
 │               CiOpt analyzes it                         │
@@ -48,7 +52,7 @@ CiOpt analyzes the AI-generated code and produces a **structured report** that y
 │            anti-patterns, fixes)                        │
 │                      │                                  │
 │                      ▼                                  │
-│          Feed report back to AI ◀── "Fix these issues" │
+│          Feed report back to AI ◀── "Fix these issues"  │
 │                      │                                  │
 │                      ▼                                  │
 │              AI improves code                           │
@@ -162,6 +166,7 @@ int* deduplicate(int* items, int n, int* result_size) {
 ## Table of Contents
 
 - [Built for Vibe Coders](#built-for-vibe-coders)
+- [VSCode Extension](#vscode-extension)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -188,6 +193,66 @@ CiOpt generates clean HTML reports with a summary dashboard, per‑function comp
 <p align="center">
   <img src="src/CiOpt_HTML_Report.png" alt="CiOpt Report Preview" width="75%" />
 </p>
+
+---
+
+## 💻 VSCode Extension
+
+**CiOpt is now available as a Visual Studio Code Extension!** Get the power of CiOpt's static analysis engine directly in your editor with a beautiful, interactive UI.
+
+### Installation
+
+1. Open **Visual Studio Code**
+2. Go to the **Extensions** panel (Ctrl+Shift+X or Cmd+Shift+X)
+3. Search for **"CiOpt-Core"**
+4. Click **Install**
+
+Or install directly from the `.vsix` file:
+
+```bash
+# Navigate to the ciopt-core directory
+cd ciopt-core
+
+# Install the extension
+code --install-extension ciopt-core-0.0.1.vsix
+```
+
+### Usage
+
+Once installed:
+
+1. Open any `.c` or `.cpp` file in VSCode
+2. **Right-click** anywhere in the editor
+3. Select **"CiOpt-Core: Analyze This File"** from the context menu
+4. A new panel opens with your analysis report featuring:
+   - Summary statistics (functions analyzed, issues found, worst complexity)
+   - Color-coded function analysis (INFO / WARNING / CRITICAL)
+   - Optimization suggestions with actionable recommendations
+
+### Extension Preview
+
+<p align="center">
+  <img src="src/CiOpt_VSCODE_ExtOut.png" alt="CiOpt VSCode Extension UI Preview" width="85%" />
+</p>
+
+### Features
+
+| Feature | Description |
+| --- | --- |
+| **One-Click Analysis** | Right-click any C/C++ file and choose **CiOpt-Core: Analyze This File** |
+| **Beautiful Webview UI** | Clean, dark-mode-friendly dashboard with severity badges and complexity pills |
+| **Big-O Estimation** | Per-function complexity: `O(1)`, `O(log n)`, `O(n)`, `O(n log n)`, `O(n²)`, `O(n³)`, `O(2ⁿ)` |
+| **Anti-Pattern Detection** | Unsafe `gets()`, `strcat` in loops, missing null checks, buffer-overflow risks |
+| **Dead-Code Detection** | Unreachable code after `return`/`break`/`goto`, unused variables, uncalled functions |
+| **Zero Compilation Needed** | Pure static analysis via Tree-sitter — no build, no execution, no side effects |
+
+### Requirements
+
+- Visual Studio Code **1.125.0** or newer
+- A C or C++ file open in the editor
+- The compiled `ciopt` engine is bundled inside the extension
+
+For more details about the extension, see the [ciopt-core README](ciopt-core/README.md).
 
 ---
 
