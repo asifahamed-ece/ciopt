@@ -166,7 +166,7 @@ int* deduplicate(int* items, int n, int* result_size) {
 ## Table of Contents
 
 - [Built for Vibe Coders](#built-for-vibe-coders)
-- [VSCode Extension](#vscode-extension)
+- [VS Code Extension](#vs-code-extension)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -196,7 +196,7 @@ CiOpt generates clean HTML reports with a summary dashboard, per‑function comp
 
 ---
 
-## 💻 VSCode Extension
+## VS Code Extension
 
 **CiOpt is now available as a Visual Studio Code Extension!** Get the power of CiOpt's static analysis engine directly in your editor with a beautiful, interactive UI.
 
