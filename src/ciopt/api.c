@@ -252,9 +252,7 @@ AnalysisReport *ciopt_analyze(const char *path, AnalysisConfig *config)
         /* Try as directory */
         SourceFile **files = source_scan_directory(path,
             (const char *const *)config->file_extensions,
-            config->file_extensions_count,
-            (const char *const *)config->exclude_dirs,
-            config->exclude_dirs_count);
+            config->file_extensions_count);
         if (files) {
             for (size_t i = 0; files[i] != NULL; i++) {
                 FileReport *fr = _analyze_file(files[i], config);

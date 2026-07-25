@@ -5,38 +5,46 @@
 #include <math.h>
 
 /* Known C standard library function complexities */
+
+/* PROVABLY O(n log n) WORST-CASE (ISO C or POSIX guaranteed) */
 static const char *_known_o_n_log_n[] = {
-    "qsort", "heapsort", "mergesort", NULL
-};
-static const char *_known_o_log_n[] = {
-    "bsearch", NULL
+    "heapsort", "mergesort",   /* POSIX. Keep these. */
+    /* "qsort" — worst-case is implementation-defined. */
+    NULL
 };
 
-/* PROVABLY O(n) — MUST touch every byte, no shortcut exists */
+/* PROVABLY O(log n) — standard guarantees binary search */
+static const char *_known_o_log_n[] = {
+    "bsearch",
+    NULL
+};
+
+/* PROVABLY O(n) — MUST touch/iterate over n bytes/characters worst-case */
 static const char *_known_o_n[] = {
     "strlen", "strcpy", "strncpy", "strcmp", "strncmp",
     "strcat", "strncat",
     "memcpy", "memmove", "memset", "memchr",
     "strdup", "strndup",
-    "strchr", "strrchr", "strstr",
+    "strchr", "strrchr", /* "strstr" REMOVED — unsafe */
     "index", "rindex",
-    "calloc",           /* MUST zero n bytes */
-    "fgets", "fread", "fwrite",  /* MUST transfer n bytes */
-    "gets",             /* unsafe, but O(n) */
+    "calloc",
+    "fgets", "fread", "fwrite",
+    "gets",
+    "printf", "fprintf", "sprintf", "snprintf", "puts",
+    "atoi", "atof", "atol",
     NULL
 };
-/* O(1) — constant time, single operation, or amortized */
+
+/* O(1) — constant time, hardware instruction, or single lookup */
 static const char *_known_o_1[] = {
-    "sizeof", "free",
-    "malloc", "realloc",   /* O(1) amortized — virtual memory mapping */
+    "sizeof",
     "abs", "labs", "llabs", "fabs", "sqrt", "cbrt",
     "isalnum", "isalpha", "iscntrl", "isdigit",
     "isgraph", "islower", "isprint", "ispunct",
     "isspace", "isupper", "isxdigit",
-    "tolower", "toupper",  /* single character lookup */
-    "printf", "fprintf", "sprintf", "snprintf", "puts",  /* I/O — context dependent, treat as O(1) */
-    "atoi", "atof", "atol",  /* usually short strings */
+    "tolower", "toupper",
     NULL
+    /* "malloc", "free", "realloc" — allocator dependent */
 };
 
 ComplexityClass get_known_function_complexity(const char *func_name)
