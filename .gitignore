@@ -1,50 +1,16 @@
-```
-# Compiled files
-*.o
-*.obj
-*.out
-
-# Dependencies
-venv/
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Build artifacts
+# --- Main Project Ignores ---
 build/
-dist/
-target/
+*.o
+*.a
+*.so
+ciopt
 
-# Logs
-*.log
-
-# Temporary files
-*.tmp
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
+# --- VS Code Extension Ignores ---
+ciopt-core/node_modules/
+ciopt-core/out/
+ciopt-core/engine/src/
+ciopt-core/engine/vendor/
+ciopt-core/engine/build/
 .vscode/
-.idea/
-
-# OS specific
 .DS_Store
 Thumbs.db
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Cache directories
-.mypy_cache/
-.pytest_cache/
-.gradle/
-```
