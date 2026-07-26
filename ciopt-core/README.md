@@ -86,8 +86,13 @@ The extension activates automatically whenever you open a C or C++ file.
 
 ## 📸 Extension Preview
 
-<!-- Replace the image below with a full-UI screenshot if you add one, e.g. images/CiOpt_VSCODE_ExtOut.png -->
 <p align="center">
+  <img src="https://raw.githubusercontent.com/asifahamed-ece/ciopt/master/ciopt-core/images/Usage_Extension.png" alt="Right-Click Anywhere on Ediotr to Use" width="85%" />
+</p>
+
+--- 
+
+<p align="center"> 
   <img src="https://raw.githubusercontent.com/asifahamed-ece/ciopt/master/ciopt-core/images/CiOpt_Warn_Suggestion.png" alt="CiOpt-Core VS Code UI Preview" width="85%" />
 </p>
 
