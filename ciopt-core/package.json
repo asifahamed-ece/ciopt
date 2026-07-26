@@ -2,7 +2,7 @@
   "name": "ciopt-core",
   "displayName": "CiOpt-Core",
   "description": "Universal C Code Complexity Analyzer using Tree-sitter",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "asifahamed-ece",
   "engines": {
     "vscode": "^1.125.0"
