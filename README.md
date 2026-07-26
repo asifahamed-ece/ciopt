@@ -233,15 +233,19 @@ Once installed:
 
 ### Extension Preview
 
+
 <p align="center">
-  <img src="src/Use4_Extension.png" alt="CiOpt VSCode Extension UI Preview" width="85%" />
+  <img src="src/Usage_Extension.png" alt="Right Click Anywhere in Editor To Use" width="85%" />
 </p>
 
+
 ---
+
 
 <p align="center">
   <img src="src/CiOpt_VSCODE_ExtOut.png" alt="CiOpt VSCode Extension UI Preview" width="85%" />
 </p>
+
 
 ### Features
 
