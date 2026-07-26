@@ -5,7 +5,8 @@ build/
 *.so
 ciopt
 
-# --- VS Code Extension Ignores ---
+# --- VS Code Extension Ignores ---'
+*.vsix
 ciopt-core/node_modules/
 ciopt-core/out/
 ciopt-core/engine/src/
