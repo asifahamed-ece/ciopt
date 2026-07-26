@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.0.3-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.0.4-blue" alt="Version" />
   <img src="https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code Extension" />
   <img src="https://img.shields.io/badge/Low%20Level-Coder%20❤️-1A1A2E?logo=c&logoColor=white" alt="Low Level Coder" />
   <img src="https://img.shields.io/badge/11-00599C?logo=c" alt="C11" />
@@ -84,7 +84,7 @@ The extension activates automatically whenever you open a C or C++ file.
 
 ---
 
-## 📸 Extension Preview
+## 📸 Extension Usage Preview
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/asifahamed-ece/ciopt/master/ciopt-core/images/Usage_Extension.png" alt="Right-Click Anywhere on Ediotr to Use" width="85%" />
