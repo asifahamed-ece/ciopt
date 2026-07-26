@@ -18,3 +18,7 @@ vsc-extension-quickstart.md
 **/.vscode/**
 **/tests/**
 **/examples/**
+# Do NOT exclude:
+# - engine/ciopt or engine/ciopt.exe (the compiled binary!)
+# - engine/Makefile
+# - engine/build/**

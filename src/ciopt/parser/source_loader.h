@@ -37,7 +37,12 @@ char *source_get_line(const SourceFile *sf, int lineno);
  * Caller must free with source_scan_free(). */
 SourceFile **source_scan_directory(const char *dir_path,
                                     const char *const *extensions,
-                                    size_t ext_count);
+                                    size_t ext_count
+#ifdef _WIN32
+                                    , const char *const *exclude_dirs,
+                                    size_t exclude_count
+#endif
+                                    );
 
 /* Free a scanned array of SourceFile pointers. */
 void source_scan_free(SourceFile **files);

@@ -4,6 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+/* Need Windows 10+ for ENABLE_VIRTUAL_TERMINAL_PROCESSING */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
+#include <windows.h>
+#endif
+
 /* ANSI color codes */
 #define ANSI_RESET   "\x1b[0m"
 #define ANSI_RED     "\x1b[31m"
@@ -14,6 +22,20 @@
 #define ANSI_CYAN    "\x1b[36m"
 #define ANSI_BOLD    "\x1b[1m"
 #define ANSI_DIM     "\x1b[2m"
+
+/* Enable ANSI escape sequences on Windows 10+ */
+static void _enable_ansi_on_windows(void)
+{
+#ifdef _WIN32
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hOut, &mode)) {
+            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+#endif
+}
 
 static const char *_severity_color(Severity s)
 {
@@ -38,6 +60,9 @@ static const char *_severity_label(Severity s)
 void render_terminal(AnalysisReport *report, bool verbose, const char *output_path)
 {
     if (!report) return;
+
+    /* Enable ANSI color support on Windows 10+ console */
+    _enable_ansi_on_windows();
 
     FILE *out = stdout;
     if (output_path) {

@@ -1,16 +1,19 @@
-# CiOpt Makefile
+# CiOpt Makefile (Engine - run from within ciopt-core/engine/ or ciopt/ root)
 # (C) 2026 Asif Ahamed. MIT License.
 #
-# Usage:
-#   make          - Build release
-#   make debug    - Build with debug symbols and sanitizers
-#   make clean    - Remove build artifacts
+# Usage (from repo root):
+#   cd ciopt-core/engine && make
+#
+# On Windows (from repo root):
+#   cd engine && mingw32-make
 
 CC := gcc
 
-SRCDIR := src
+# Source root is the ciopt/ repository root
+ROOTDIR := ../..
+SRCDIR := $(ROOTDIR)/src
 BUILDDIR := build
-VENDORDIR := vendor
+VENDORDIR := $(ROOTDIR)/vendor
 
 # Tree-sitter paths
 TS_DIR := $(VENDORDIR)/tree-sitter
@@ -92,10 +95,10 @@ test: dirs $(BUILDDIR)/tests/test_vector$(EXE) $(BUILDDIR)/tests/test_analyzer$(
 	$(RUN_TEST_VECTOR)
 	$(RUN_TEST_ANALYZER)
 
-$(BUILDDIR)/tests/test_vector$(EXE): tests/test_vector.c $(BUILDDIR)/ciopt/utils/vector.o
+$(BUILDDIR)/tests/test_vector$(EXE): $(ROOTDIR)/tests/test_vector.c $(BUILDDIR)/ciopt/utils/vector.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(BUILDDIR)/tests/test_analyzer$(EXE): tests/test_analyzer.c $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ)
+$(BUILDDIR)/tests/test_analyzer$(EXE): $(ROOTDIR)/tests/test_analyzer.c $(CIOPT_OBJS) $(TS_OBJ) $(TS_C_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
 # Create build directories

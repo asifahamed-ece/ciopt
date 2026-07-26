@@ -15,26 +15,54 @@ export function activate(context: vscode.ExtensionContext) {
         const exeName = isWindows ? 'ciopt.exe' : 'ciopt';
         const enginePath = path.join(context.extensionPath, 'engine', exeName);
 
+        // Debug: Log paths for troubleshooting
+        console.log('CiOpt: enginePath =', enginePath);
+        console.log('CiOpt: filePath =', filePath);
+
+        // Check if engine exists before running
+        const fs = require('fs');
+        if (!fs.existsSync(enginePath)) {
+            vscode.window.showErrorMessage(`CiOpt-Core Error: Engine binary not found at ${enginePath}. Please ensure the extension was built correctly.`);
+            return;
+        }
+
         vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: "CiOpt-Core: Analyzing code...",
             cancellable: false
         }, async () => {
             try {
-                const result = cp.execFileSync(enginePath, ['analyze', filePath], { 
-                    encoding: 'utf8',
-                    stdio: ['pipe', 'pipe', 'pipe']
-                });
-                
+                // On Windows, avoid shell:true to prevent argument escaping issues
+                let result;
+                if (isWindows) {
+                    result = cp.execFileSync(enginePath, ['analyze', filePath], {
+                        encoding: 'utf8',
+                        stdio: ['pipe', 'pipe', 'pipe'],
+                        windowsHide: true
+                    });
+                } else {
+                    result = cp.execFileSync(enginePath, ['analyze', filePath], {
+                        encoding: 'utf8',
+                        stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                }
+
                 const cleanOutput = stripAnsiCodes(result);
                 showResultsWebview(cleanOutput, context);
             } catch (error: any) {
                 // 1. Capture the actual output from your C tool
                 const stdout = (error as any).stdout ? stripAnsiCodes((error as any).stdout) : '';
                 const stderr = (error as any).stderr ? stripAnsiCodes((error as any).stderr) : '';
-                
+
                 let errorMsg = "";
-                
+
+                // Windows-specific error handling (isWindows already declared above)
+                if (isWindows && (error as any).code === 'ENOENT') {
+                    errorMsg += `Error: The CiOpt engine binary was not found.\n`;
+                    errorMsg += `Expected path: ${enginePath}\n`;
+                    errorMsg += `Make sure the extension includes the compiled ciopt.exe in the engine/ folder.\n\n`;
+                }
+
                 // 2. If the C tool printed something, show THAT first (it's the real answer)
                 if (stdout) {
                     errorMsg += `Analysis Output:\n${stdout}\n`;
@@ -42,15 +70,15 @@ export function activate(context: vscode.ExtensionContext) {
                 if (stderr) {
                     errorMsg += `System Errors:\n${stderr}\n`;
                 }
-                
+
                 // 3. ONLY show the generic Node.js "Command failed" message if the C tool was completely silent
                 if (!stdout && !stderr && (error as any).message) {
                     errorMsg += `Note: The analysis tool exited with an error.\nDetails: ${(error as any).message}`;
                 }
-                
+
                 // 4. Fallback if absolutely nothing was captured
                 const finalMessage = errorMsg || "The analysis tool exited with an error but provided no details.";
-                
+
                 showResultsWebview(finalMessage, context);
             }
         });
@@ -90,10 +118,10 @@ function showResultsWebview(output: string, context: vscode.ExtensionContext) {
                     --bg-color: var(--vscode-editor-background);
                     --card-bg: var(--vscode-textBlockQuote-background);
                 }
-                body { 
-                    font-family: var(--vscode-font-family); 
-                    padding: 24px; 
-                    color: var(--vscode-foreground); 
+                body {
+                    font-family: var(--vscode-font-family);
+                    padding: 24px;
+                    color: var(--vscode-foreground);
                     background-color: var(--bg-color);
                     line-height: 1.6;
                 }
@@ -102,18 +130,18 @@ function showResultsWebview(output: string, context: vscode.ExtensionContext) {
                     padding-bottom: 12px;
                     margin-bottom: 24px;
                 }
-                .badge { 
-                    display: inline-block; 
-                    padding: 4px 12px; 
-                    border-radius: 4px; 
-                    background-color: var(--vscode-button-background); 
-                    color: var(--vscode-button-foreground); 
-                    font-size: 0.85em; 
+                .badge {
+                    display: inline-block;
+                    padding: 4px 12px;
+                    border-radius: 4px;
+                    background-color: var(--vscode-button-background);
+                    color: var(--vscode-button-foreground);
+                    font-size: 0.85em;
                     font-weight: bold;
                     margin-bottom: 12px;
                 }
-                h2 { 
-                    color: var(--vscode-textLink-foreground); 
+                h2 {
+                    color: var(--vscode-textLink-foreground);
                     margin: 0 0 8px 0;
                     font-size: 1.8em;
                 }
@@ -160,7 +188,7 @@ function showResultsWebview(output: string, context: vscode.ExtensionContext) {
                     font-size: 0.9em;
                 }
                 .issue-info { font-weight: bold; margin-bottom: 4px; }
-                .issue-complexity { 
+                .issue-complexity {
                     display: inline-block;
                     padding: 2px 8px;
                     border-radius: 3px;
@@ -177,14 +205,14 @@ function showResultsWebview(output: string, context: vscode.ExtensionContext) {
                 .severity-info { border-left-color: var(--info-color); }
                 .severity-warning { border-left-color: var(--warning-color); }
                 .severity-critical { border-left-color: var(--critical-color); }
-                
+
                 .complexity-o1 { background-color: var(--success-color); color: #000; }
                 .complexity-on { background-color: var(--info-color); color: #fff; }
                 .complexity-ologn { background-color: #b180d7; color: #fff; }
                 .complexity-on2 { background-color: var(--warning-color); color: #000; }
                 .complexity-on3 { background-color: #ff8800; color: #fff; }
                 .complexity-o2n { background-color: var(--critical-color); color: #fff; }
-                
+
                 .severity-badge {
                     display: inline-block;
                     padding: 2px 8px;
@@ -197,7 +225,7 @@ function showResultsWebview(output: string, context: vscode.ExtensionContext) {
                 .badge-info { background-color: var(--info-color); color: #fff; }
                 .badge-warning { background-color: var(--warning-color); color: #000; }
                 .badge-critical { background-color: var(--critical-color); color: #fff; }
-                
+
                 pre {
                     background-color: var(--card-bg);
                     padding: 16px;
@@ -280,13 +308,17 @@ function parseCiOptOutput(output: string): any {
     };
 
     const lines = output.split('\n');
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        
-        // Extract file name - more flexible matching
+
+        // Extract file name - handle both Unix (/) and Windows (\\) paths
         if (line.includes('.c') && (line.includes('(') || line.includes('File'))) {
-            const fileMatch = line.match(/\/([^/]+\.c)/);
+            // Try Unix-style path first, then Windows-style
+            let fileMatch = line.match(/\/([^/]+\.c)/);
+            if (!fileMatch) {
+                fileMatch = line.match(/\\([^\\]+\.c)/);
+            }
             if (fileMatch) {
                 result.fileName = fileMatch[1];
             }
@@ -295,7 +327,7 @@ function parseCiOptOutput(output: string): any {
                 result.fileLines = linesMatch[1];
             }
         }
-        
+
         // Extract stats - handle different formats
         if (line.includes('Functions analyzed')) {
             const match = line.match(/:\s*(\d+)/);
@@ -325,22 +357,22 @@ function parseCiOptOutput(output: string): any {
                 result.stats.time = match[1];
             }
         }
-        
+
         // Extract ALL function issues (INFO, WARNING, CRITICAL)
         // More flexible regex to catch all formats
         if (line.match(/\[(INFO|WARNING|CRITICAL)\]/)) {
             const severityMatch = line.match(/\[(INFO|WARNING|CRITICAL)\]/);
             const severity = severityMatch ? severityMatch[1] : 'INFO';
-            
+
             // Try multiple patterns to extract function name
             let funcMatch = line.match(/\]\s*(\S+)\s*\(/);
             if (!funcMatch) {
                 funcMatch = line.match(/\]\s*(\S+)/);
             }
-            
+
             const locationMatch = line.match(/\(L(\d+)-(\d+)\)/) || line.match(/\(L(\d+)/);
             const complexityMatch = line.match(/->\s*(O\([^)]+\))/i) || line.match(/O\([^)]+\)/i);
-            
+
             if (funcMatch) {
                 const functionName = funcMatch[1];
                 let location = '';
@@ -352,7 +384,7 @@ function parseCiOptOutput(output: string): any {
                     }
                 }
                 const complexity = complexityMatch ? complexityMatch[0] : 'O(n)';
-                
+
                 // Look for suggestion/anti-pattern in next few lines
                 let suggestion = '';
                 for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
@@ -366,7 +398,7 @@ function parseCiOptOutput(output: string): any {
                         break;
                     }
                 }
-                
+
                 result.issues.push({
                     severity,
                     functionName,
@@ -376,13 +408,14 @@ function parseCiOptOutput(output: string): any {
                 });
             }
         }
-        
+
         // Extract optimization suggestions (lines starting with -)
-        if (line.startsWith('-') && line.includes(':') && line.includes('.c:')) {
+        // Supports both Unix paths (file.c:) and Windows paths (file.c: or .c:)
+        if (line.startsWith('-') && line.includes(':') && (line.includes('.c:') || line.includes('.c '))) {
             result.suggestions.push(line);
         }
     }
-    
+
     return result;
 }
 

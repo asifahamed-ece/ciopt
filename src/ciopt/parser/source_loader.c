@@ -46,7 +46,12 @@ SourceFile *source_load(const char *path)
     long file_size = ftell(fp);
     rewind(fp);
 
+    /* On Windows, long is 32-bit, so ftell can overflow for files >2GB */
+#ifdef _WIN32
     if (file_size < 0) {
+#else
+    if (file_size < 0 || (unsigned long)file_size > (size_t)-1) {
+#endif
         fclose(fp);
         return NULL;
     }
@@ -130,7 +135,10 @@ char *source_get_line(const SourceFile *sf, int lineno)
     const char *start = p;
     while (*p && *p != '\n') p++;
 
+    /* Strip trailing \r (Windows CRLF) */
     size_t len = (size_t)(p - start);
+    if (len > 0 && start[len - 1] == '\r') len--;
+    
     char *line = (char *)malloc(len + 1);
     if (!line) return NULL;
 

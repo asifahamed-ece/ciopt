@@ -41,8 +41,16 @@ target_compile_definitions(ciopt_core PUBLIC _POSIX_C_SOURCE=200809L _DEFAULT_SO
 target_link_libraries(ciopt_core PUBLIC tree-sitter tree-sitter-c)
 
 # Build main CLI executable
+if(WIN32)
+    # Ensure console subsystem (not windows subsystem) on Windows GUI builds
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--subsystem,console")
+endif()
 add_executable(ciopt src/main.c)
 target_link_libraries(ciopt PRIVATE ciopt_core)
+if(WIN32)
+    # Use winmm for time functions on MinGW (replaces POSIX clock_gettime)
+    target_link_libraries(ciopt PRIVATE -lwinmm)
+endif()
 
 # Enable testing
 enable_testing()
