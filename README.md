@@ -216,7 +216,7 @@ Or install directly from the `.vsix` file:
 cd ciopt-core
 
 # Install the extension
-code --install-extension ciopt-core-0.0.2.vsix
+code --install-extension ciopt-core-0.0.3.vsix
 ```
 
 ### Usage
