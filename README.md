@@ -307,7 +307,7 @@ For more details about the extension, see the [ciopt-core README](ciopt-core/REA
 
 ```bash
 # Clone the repository
-git clone https://github.com/asif-ahamed/ciopt.git
+git clone https://github.com/asifahamed-ece/ciopt.git
 cd ciopt
 
 # Build the project
@@ -902,7 +902,7 @@ We welcome contributions! Here's how you can help:
 
 ```bash
 # Clone the repository
-git clone https://github.com/asif-ahamed/ciopt.git
+git clone https://github.com/asifahamed-ece/ciopt.git
 cd ciopt
 
 # Build in debug mode
